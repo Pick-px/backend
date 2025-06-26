@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CanvasGateway } from './canvas.gateway';
 import { CanvasService } from './canvas.service';
-import { SubscribeMessage, ConnectedSocket, WebSocketServer } from '@nestjs/websockets';
+import {
+  SubscribeMessage,
+  ConnectedSocket,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessageBody } from '@nestjs/websockets';
 
@@ -9,8 +13,8 @@ import { MessageBody } from '@nestjs/websockets';
   providers: [CanvasGateway, CanvasService],
 })
 export class CanvasModule {
-    @WebSocketServer()
-    server: Server;
+  @WebSocketServer()
+  server: Server;
   @SubscribeMessage('join')
   handleJoin(
     @MessageBody() data: { canvas_id: string },
