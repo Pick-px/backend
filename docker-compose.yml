@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # NestJS 애플리케이션
+  app:
+    build:
+      context: .
+      target: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - redis
+      - postgres
+
+  # Redis (ElastiCache 대신 로컬 개발용)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # PostgreSQL (RDS 대신 로컬 개발용)
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: pick_px
+      POSTGRES_USER: pixel_user
+      POSTGRES_PASSWORD: teamgmgdogs
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/create_db.sql/create_db.sql:/docker-entrypoint-initdb.d/1_create_db.sql
+      - ./sql/schema.sql/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
+
+volumes:
+  redis_data:
+  postgres_data:
