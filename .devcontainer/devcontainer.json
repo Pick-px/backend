@@ -1,0 +1,10 @@
+{
+  "name": "pick_px",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/app",
+  "forwardPorts": [3000, 5432],
+  "postCreateCommand": "npm install",
+  "remoteUser": "node",
+  "overrideCommand": false
+}
