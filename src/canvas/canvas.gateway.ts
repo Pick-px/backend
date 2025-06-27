@@ -29,21 +29,33 @@ import {
   
     // 3. 초기 캔버스 데이터 요청
     @SubscribeMessage('get-canvas')
-    handleGetCanvas(@ConnectedSocket() client: Socket) {
-      const canvasData = this.canvasService.getAllPixels();
-      // 요청한 클라이언트에게만 전송
-      client.emit('canvas-data', canvasData);
+    async handleGetCanvas(@ConnectedSocket() client: Socket) {
+      try {
+        const canvasData = await this.canvasService.getAllPixels('default');
+        // 요청한 클라이언트에게만 전송
+        client.emit('canvas-data', canvasData);
+      } catch (error) {
+        console.error('캔버스 데이터 조회 실패:', error);
+        client.emit('error', { message: '캔버스 데이터 조회 실패' });
+      }
     }
   
     // 4. 픽셀 그리기 요청
     @SubscribeMessage('draw-pixel')
-    handleDrawPixel(
-      @MessageBody() pixel: PixelData,
+    async handleDrawPixel(
+      @MessageBody() pixel: PixelData & { canvas_id: string },
       @ConnectedSocket() client: Socket,
     ) {
-      const isValid = this.canvasService.applyDrawPixel(pixel);
-      if (!isValid) return;
-      this.server.emit('pixel-update', pixel);
+      try {
+        console.log('픽셀 수신:', pixel); 
+        const isValid = await this.canvasService.applyDrawPixel(pixel);
+        if (!isValid) return;
+        // canvas_id 방에만 브로드캐스트
+        this.server.to(pixel.canvas_id).emit('pixel-update', pixel);
+      } catch (error) {
+        console.error('픽셀 그리기 실패:', error);
+        client.emit('error', { message: '픽셀 그리기 실패' });
+      }
     }
     
     @SubscribeMessage('join')
