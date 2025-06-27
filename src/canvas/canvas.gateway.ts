@@ -31,7 +31,7 @@ import {
     @SubscribeMessage('get-canvas')
     async handleGetCanvas(@ConnectedSocket() client: Socket) {
       try {
-        const canvasData = await this.canvasService.getAllPixels('default');
+        const canvasData = await this.canvasService.getAllPixels();
         // 요청한 클라이언트에게만 전송
         client.emit('canvas-data', canvasData);
       } catch (error) {

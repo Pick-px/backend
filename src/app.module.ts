@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
-import { RedisModule } from './redis/redis.module';
+import { RedisModule } from './redis/redis.module'; // 추가된 부분
 import { CanvasModule } from './canvas/canvas.module';
+import { PixelService } from './pixel/pixel.service';
+import { DatabaseModule } from './database/database.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
   imports: [
@@ -24,8 +26,9 @@ import { CanvasModule } from './canvas/canvas.module';
     }),
     RedisModule,
     CanvasModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, PixelService],
 })
 export class AppModule {}
