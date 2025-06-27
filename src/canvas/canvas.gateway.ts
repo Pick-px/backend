@@ -3,6 +3,7 @@ import {
   } from '@nestjs/websockets';
   import { Server, Socket } from 'socket.io';
   import { CanvasService } from './canvas.service';
+  import { PixelData } from './interfaces/pixel-data.interface';
   
   @WebSocketGateway({ 
     cors: {
@@ -37,14 +38,29 @@ import {
     // 4. 픽셀 그리기 요청
     @SubscribeMessage('draw-pixel')
     handleDrawPixel(
-      @MessageBody() pixelData: { x: number; y: number; color: string },
+      @MessageBody() pixel: PixelData,
       @ConnectedSocket() client: Socket,
     ) {
-      // 1. 유효성/동시성 검사 (선점 로직)
-      const isValid = this.canvasService.tryDrawPixel(pixelData);
-      if (!isValid) return; // 이미 선점된 픽셀이면 무시
-  
-      // 2. 모든 클라이언트에게 브로드캐스트 (자기 자신 포함)
-      this.server.emit('pixel-update', pixelData);
+      const isValid = this.canvasService.applyDrawPixel(pixel);
+      if (!isValid) return;
+      this.server.emit('pixel-update', pixel);
+    }
+    
+    @SubscribeMessage('join')
+    handleJoin(
+      @MessageBody() data: { canvas_id: string },
+      @ConnectedSocket() client: Socket,
+    ) {
+      client.join(data.canvas_id);
+    }
+
+    @SubscribeMessage('chat')
+    handleChat(
+      @MessageBody() body: { canvas_id: string; message: string },
+      @ConnectedSocket() client: Socket,
+    ) {
+      this.server.to(body.canvas_id).emit('chat', {
+        message: body.message,
+      });
     }
   }

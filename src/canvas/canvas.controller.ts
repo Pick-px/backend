@@ -19,7 +19,7 @@ export class CanvasController {
   @Post()
   async create(@Body() createCanvasDto: createCanvasDto) {
     try {
-      await this.canvasService.createCanvas(createCanvasDto);
+      //await this.canvasService.createCanvas(createCanvasDto);
     } catch (err) {
       console.error(err);
     }
