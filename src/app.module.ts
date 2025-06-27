@@ -3,7 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
-import { RedisModule } from './redis/redis.module'; // 추가된 부분
+import { RedisModule } from './redis/redis.module';
+import { CanvasModule } from './canvas/canvas.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RedisModule } from './redis/redis.module'; // 추가된 부분
       synchronize: true,
     }),
     RedisModule,
+    CanvasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
