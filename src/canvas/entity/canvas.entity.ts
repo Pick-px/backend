@@ -17,7 +17,7 @@ export class Canvas {
   @Column({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', name: 'ended_at' })
+  @Column({ type: 'timestamp', name: 'ended_at', nullable: true })
   endedAt: Date;
 
   @Column({ name: 'size_x' })

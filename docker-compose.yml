@@ -17,6 +17,20 @@ services:
       - redis
       - postgres
 
+  worker:
+    build:
+      context: .
+      target: development
+    command: npm run start:worker
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+
   # Redis (ElastiCache 대신 로컬 개발용)
   redis:
     image: redis:7-alpine
