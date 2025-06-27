@@ -49,6 +49,10 @@ create table if not exists pixels
 alter table pixels
     owner to pixel_user;
 
+-- 복합 인덱스: canvas_id + y + x
+-- CREATE INDEX IF NOT EXISTS idx_pixels_canvas_yx
+-- ON pixels (canvas_id, y, x);
+
 create table if not exists user_canvas
 (
     user_id   bigint                              not null,

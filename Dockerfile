@@ -18,6 +18,7 @@ USER node
 
 # 개발 환경
 FROM base AS development
+COPY .env ./
 EXPOSE 3000
 CMD ["npm", "run", "start:dev"]
 
