@@ -29,9 +29,12 @@ import {
   
     // 3. 초기 캔버스 데이터 요청
     @SubscribeMessage('get-canvas')
-    async handleGetCanvas(@ConnectedSocket() client: Socket) {
+    async handleGetCanvas(
+      @MessageBody() data: { canvas_id: string },
+      @ConnectedSocket() client: Socket
+    ) {
       try {
-        const canvasData = await this.canvasService.getAllPixels();
+        const canvasData = await this.canvasService.getAllPixels(data.canvas_id);
         // 요청한 클라이언트에게만 전송
         client.emit('canvas-data', canvasData);
       } catch (error) {
