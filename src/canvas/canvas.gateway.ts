@@ -3,6 +3,7 @@ import {
   } from '@nestjs/websockets';
   import { Server, Socket } from 'socket.io';
   import { CanvasService } from './canvas.service';
+  import { PixelData } from './interfaces/pixel-data.interface';
   
   @WebSocketGateway({ 
     cors: {
@@ -28,23 +29,50 @@ import {
   
     // 3. 초기 캔버스 데이터 요청
     @SubscribeMessage('get-canvas')
-    handleGetCanvas(@ConnectedSocket() client: Socket) {
-      const canvasData = this.canvasService.getAllPixels();
-      // 요청한 클라이언트에게만 전송
-      client.emit('canvas-data', canvasData);
+    async handleGetCanvas(@ConnectedSocket() client: Socket) {
+      try {
+        const canvasData = await this.canvasService.getAllPixels();
+        // 요청한 클라이언트에게만 전송
+        client.emit('canvas-data', canvasData);
+      } catch (error) {
+        console.error('캔버스 데이터 조회 실패:', error);
+        client.emit('error', { message: '캔버스 데이터 조회 실패' });
+      }
     }
   
     // 4. 픽셀 그리기 요청
     @SubscribeMessage('draw-pixel')
-    handleDrawPixel(
-      @MessageBody() pixelData: { x: number; y: number; color: string },
+    async handleDrawPixel(
+      @MessageBody() pixel: PixelData & { canvas_id: string },
       @ConnectedSocket() client: Socket,
     ) {
-      // 1. 유효성/동시성 검사 (선점 로직)
-      const isValid = this.canvasService.tryDrawPixel(pixelData);
-      if (!isValid) return; // 이미 선점된 픽셀이면 무시
-  
-      // 2. 모든 클라이언트에게 브로드캐스트 (자기 자신 포함)
-      this.server.emit('pixel-update', pixelData);
+      try {
+        console.log('픽셀 수신:', pixel); 
+        const isValid = await this.canvasService.applyDrawPixel(pixel);
+        if (!isValid) return;
+        // canvas_id 방에만 브로드캐스트
+        this.server.to(pixel.canvas_id).emit('pixel-update', pixel);
+      } catch (error) {
+        console.error('픽셀 그리기 실패:', error);
+        client.emit('error', { message: '픽셀 그리기 실패' });
+      }
+    }
+    
+    @SubscribeMessage('join')
+    handleJoin(
+      @MessageBody() data: { canvas_id: string },
+      @ConnectedSocket() client: Socket,
+    ) {
+      client.join(data.canvas_id);
+    }
+
+    @SubscribeMessage('chat')
+    handleChat(
+      @MessageBody() body: { canvas_id: string; message: string },
+      @ConnectedSocket() client: Socket,
+    ) {
+      this.server.to(body.canvas_id).emit('chat', {
+        message: body.message,
+      });
     }
   }

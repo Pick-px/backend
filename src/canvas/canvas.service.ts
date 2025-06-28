@@ -23,13 +23,7 @@ export class CanvasService {
   private pixels: Map<string, string> = new Map();
 
   // 픽셀 선점(동시성) 로직
-  tryDrawPixel({ x, y, color }: PixelData): boolean {
-    const key = `${x},${y}`;
-    if (this.pixels.has(key)) {
-      // 이미 선점된 픽셀이면 무시
-      return false;
-    }
-    this.pixels.set(key, color);
+  async tryDrawPixel({ canvas_id, x, y, color }: PixelData & { canvas_id: string }): Promise<boolean> {
     return true;
   }
 
@@ -67,5 +61,8 @@ export class CanvasService {
       console.error(err);
       return null;
     }
+  }
+  async applyDrawPixel(pixel: PixelData & { canvas_id: string }): Promise<boolean> {
+    return this.tryDrawPixel(pixel);
   }
 }
