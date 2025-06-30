@@ -6,11 +6,6 @@ import { Canvas } from './entity/canvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { pixelQueue } from '../queues/bullmq.queue';
-interface PixelData {
-  x: number;
-  y: number;
-  color: string;
-}
 
 @Injectable()
 export class CanvasService {
@@ -24,7 +19,7 @@ export class CanvasService {
   ) {}
 
   // 픽셀 저장 로직 (Redis만 사용)
-  async tryDrawPixel({ canvas_id, x, y, color }: PixelData & { canvas_id: string }): Promise<boolean> {
+  async tryDrawPixel({ canvas_id, x, y, color }: { canvas_id: string, x: number, y: number, color: string }): Promise<boolean> {
     try {
       const key = `${canvas_id}:${x}:${y}`;
       
@@ -39,13 +34,13 @@ export class CanvasService {
   }
 
   // 픽셀 조회 로직 (Redis 우선, 없으면 PostgreSQL)
-  async getAllPixels(canvas_id: string = 'default'): Promise<PixelData[]> {
+  async getAllPixels(canvas_id: string = 'default'): Promise<{ x: number; y: number; color: string }[]> {
     try {
       // Redis에서 먼저 조회
       const keys = await this.redisClient.keys(`${canvas_id}:*`);
       
       if (keys.length > 0) {
-        const pixels: PixelData[] = [];
+        const pixels: { x: number; y: number; color: string }[] = [];
         for (const key of keys) {
           const color = await this.redisClient.get(key);
           if (color) {
@@ -74,7 +69,7 @@ export class CanvasService {
         await this.redisClient.set(key, pixel.color);
       }
       
-      const pixels: PixelData[] = dbPixels.map(pixel => ({
+      const pixels: { x: number; y: number; color: string }[] = dbPixels.map(pixel => ({
         x: pixel.x,
         y: pixel.y,
         color: pixel.color
@@ -160,7 +155,20 @@ export class CanvasService {
     }
   }
 
-  async applyDrawPixel(pixel: PixelData & { canvas_id: string }): Promise<boolean> {
-    return this.tryDrawPixel(pixel);
+  async applyDrawPixel({ canvas_id, x, y, color }: { canvas_id: string, x: number, y: number, color: string }): Promise<boolean> {
+    return this.tryDrawPixel({ canvas_id, x, y, color });
+  }
+
+  async getCanvasById(canvas_id: string): Promise<Canvas | null> {
+    return this.canvasRepository.findOne({
+      where: { id: Number(canvas_id) }
+    });
+  }
+
+  async getCanvasPixelsPaginated(canvas_id: string, page: number = 1, limit: number = 1000): Promise<{ x: number; y: number; color: string }[]> {
+    const offset = (page - 1) * limit;
+    // Redis에서 키 조회 후 페이지네이션 적용
+    // 또는 PostgreSQL에서 직접 페이지네이션
+    return [];
   }
 }
