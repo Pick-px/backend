@@ -62,7 +62,7 @@ void (async () => {
         // 나중에 성능 저하가 일어난다고 판단될 시 로직 수정 후 병렬 처리
         // concurrency: 8,
         connection: redisConnection,
-      },
+      }
     );
 
     console.log('Worker started and ready for jobs.');

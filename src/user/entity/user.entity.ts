@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { UserCanvas } from 'src/entity/UserCanvs.entity';
+import { UserCanvas } from '../../entity/UserCanvas.entity';
 
 @Entity('Users')
 export class User {

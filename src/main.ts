@@ -24,6 +24,7 @@ async function bootstrap() {
   app.enableCors({
     origin: 'http://localhost:5173',
     credentials: true,
+    exposedHeaders: ['Authorization'],
   });
   // [*] NestJS의 @WebSocketGateway()에 CORS 옵션을 이미 줬지만, NestJS는 내부적으로 Express 인스턴스를 쓰고 있기 때문에,
   // 프론트엔드가 socket.io에 연결을 시도할 때 초기 HTTP 핸드셰이크 요청 자체가 Express에서 막히는 상황을 제거
