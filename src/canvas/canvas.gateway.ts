@@ -27,20 +27,20 @@ import {
     }
   
     // 초기 캔버스 데이터 요청
-    @SubscribeMessage('get-canvas')
-    async handleGetCanvas(
-      @MessageBody() data: { canvas_id: string },
-      @ConnectedSocket() client: Socket
-    ) {
-      try {
-        const canvasData = await this.canvasService.getAllPixels(data.canvas_id);
-        // 요청한 클라이언트에게만 전송
-        client.emit('canvas-data', canvasData);
-      } catch (error) {
-        console.error('캔버스 데이터 조회 실패:', error);
-        client.emit('error', { message: '캔버스 데이터 조회 실패' });
-      }
-    }
+    // @SubscribeMessage('get-canvas')
+    // async handleGetCanvas(
+    //   @MessageBody() data: { canvas_id: string },
+    //   @ConnectedSocket() client: Socket
+    // ) {
+    //   try {
+    //     const canvasData = await this.canvasService.getAllPixels(data.canvas_id);
+    //     // 요청한 클라이언트에게만 전송
+    //     client.emit('canvas-data', canvasData);
+    //   } catch (error) {
+    //     console.error('캔버스 데이터 조회 실패:', error);
+    //     client.emit('error', { message: '캔버스 데이터 조회 실패' });
+    //   }
+    // }
   
     // 픽셀 그리기 요청
     @SubscribeMessage('draw-pixel')
