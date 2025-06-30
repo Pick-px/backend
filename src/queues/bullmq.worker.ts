@@ -28,8 +28,8 @@ void (async () => {
 
         const pixels: Pixel[] = [];
 
-        for (let y = 0; y < size_y; y++) {
-          for (let x = 0; x < size_x; x++) {
+        for (let x = 0; x < size_x; x++) {
+          for (let y = 0; y < size_y; y++) {
             const pixel = new Pixel();
             pixel.canvasId = canvas_id;
             pixel.x = x;
@@ -54,11 +54,13 @@ void (async () => {
         }
         const duration = Date.now() - start;
         console.log(
-          `[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`,
+          `[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`
         );
       },
       {
-        concurrency: 8,
+        // 지금 로직 상으로는 병렬 처리가 의미가 없음
+        // 나중에 성능 저하가 일어난다고 판단될 시 로직 수정 후 병렬 처리
+        // concurrency: 8,
         connection: redisConnection,
       },
     );
