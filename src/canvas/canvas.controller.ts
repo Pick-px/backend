@@ -45,6 +45,7 @@ export class CanvasController {
     schema: {
       example: {
         success: true,
+        canvas_id: '1',
         data: {
           pixels: [
             { x: 100, y: 200, color: '#ff0000' },
@@ -68,6 +69,9 @@ export class CanvasController {
     // 실제 캔버스 정보 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
     const canvas = await this.canvasService.getCanvasById(canvas_id);
     if (!canvas?.metaData) throw new Error('캔버스가 없습니다.');
+
+    const id = canvas.canvas_id;
+    const meta = canvas.metaData;
 
     const id = canvas.canvas_id;
     const meta = canvas.metaData;
@@ -114,6 +118,7 @@ export class CanvasController {
       return {
         success: true,
         data: {
+
           id: canvas.canvas_id,
           title: canvasMetaData.title,
           type: canvasMetaData.type,
