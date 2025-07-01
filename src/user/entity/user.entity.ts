@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
 
-@Entity('Users')
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;

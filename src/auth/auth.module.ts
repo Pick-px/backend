@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
+import { UserService } from 'src/user/user.service';
 
 @Module({
   imports: [
@@ -8,7 +9,7 @@ import { AuthService } from './auth.service';
       secret: process.env.JWT_SECRET, // 환경 변수에서 JWT 시크릿 키를 가져옵니다. (예: process
     }),
   ],
-  providers: [AuthService],
+  providers: [AuthService, UserService],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
