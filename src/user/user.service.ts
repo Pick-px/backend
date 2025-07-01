@@ -108,9 +108,6 @@ export class UserService {
     const user = await this.userRepository.findOne({
       where: { email: userInfo.email },
     });
-
-    console.log(user);
-
     if (user == null) {
       const newUser = this.userRepository.create({
         email: userInfo.email,
@@ -118,7 +115,6 @@ export class UserService {
         updatedAt: new Date(),
         userName: userInfo.userName,
       });
-
       const result = await this.userRepository.save(newUser);
       const at = this.authService.generateAccessJWT(result.email);
       const rt = this.authService.generateRefreshJWT(result.email);
@@ -199,5 +195,14 @@ export class UserService {
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     });
+  }
+
+  async findById(user_id: string) {
+    const result = await this.userRepository.findOne({
+      where: { email: user_id },
+    });
+    if (!result) throw new Error('유저 정보가 없습니다.');
+
+    return result.email;
   }
 }

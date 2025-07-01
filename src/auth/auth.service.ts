@@ -15,4 +15,8 @@ export class AuthService {
     const payload = { sub: user_id, jti: randomUUID() };
     return this.jwtService.sign(payload, { expiresIn: '7d' });
   }
+
+  // async verifyAccessToken(token: string){
+
+  // }
 }
