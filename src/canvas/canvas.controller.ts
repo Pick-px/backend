@@ -73,6 +73,8 @@ export class CanvasController {
     const id = canvas.canvas_id;
     const meta = canvas.metaData;
 
+    const id = canvas.canvas_id;
+    const meta = canvas.metaData;
     return {
       success: true,
       data: {
@@ -90,11 +92,12 @@ export class CanvasController {
 
   @Get('default')
   async getDefaultCanvas() {
-    const defaultCanvas = await this.canvasService.getCanvasById(); // 파라미터 없이 호출 시 디폴트 반환
+    const canvas = await this.canvasService.getCanvasById(); // 파라미터 없이 호출 시 디폴트 반환
+    const defaultCanvas = canvas?.canvas_id;
     if (!defaultCanvas) {
-      return { id: null };
+      throw new Error('아이디 없음');
     }
-    return { id: defaultCanvas.id };
+    return { id: defaultCanvas };
   }
 
   @Get()
@@ -104,20 +107,25 @@ export class CanvasController {
       if (!canvas) {
         // 디폴트 캔버스 조회
         canvas = await this.canvasService.getCanvasById();
-        if (!canvas) {
+        if (!canvas?.metaData) {
           return { success: false, message: '캔버스가 없습니다.' };
         }
       }
+      const canvasMetaData = canvas.metaData;
+
+      if (!canvasMetaData) throw new Error('캔버스 정보 없음');
+      if (!canvas.canvas_id) throw new Error('캔버스 Id ');
       return {
         success: true,
         data: {
-          id: canvas.id,
-          title: canvas.title,
-          type: canvas.type,
-          createdAt: canvas.createdAt,
-          endedAt: canvas.endedAt,
-          sizeX: canvas.sizeX,
-          sizeY: canvas.sizeY,
+
+          id: canvas.canvas_id,
+          title: canvasMetaData.title,
+          type: canvasMetaData.type,
+          createdAt: canvasMetaData.createdAt,
+          endedAt: canvasMetaData.endedAt,
+          sizeX: canvasMetaData.sizeX,
+          sizeY: canvasMetaData.sizeY,
         },
       };
     } catch (err) {

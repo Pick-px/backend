@@ -88,11 +88,14 @@ export class CanvasService {
     canvas_id?: string
   ): Promise<{ x: number; y: number; color: string }[]> {
     let realCanvasId = canvas_id;
+
     if (!realCanvasId) {
-      const defaultCanvas = await this.canvasRepository.findOne({
+      const defaultCanvas = await this.canvasRepository.find({
         order: { id: 'ASC' },
+        take: 1,
       });
-      realCanvasId = defaultCanvas?.id?.toString();
+      const canvas = defaultCanvas[0];
+      realCanvasId = canvas?.id?.toString();
     }
     if (!realCanvasId) return [];
 
@@ -188,10 +191,10 @@ export class CanvasService {
     if (!realCanvasId) return null;
     const idNum = Number(realCanvasId);
     if (isNaN(idNum)) return null;
-    const canvas = await this.canvasRepository.findOneBy({ id: idNum });
+    const meta = await this.canvasRepository.findOneBy({ id: idNum });
     return {
       canvas_id: realCanvasId,
-      metaData: canvas,
+      metaData: meta,
     };
   }
 }
