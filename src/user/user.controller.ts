@@ -16,7 +16,7 @@ import { Response } from 'express';
 import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
 
 @ApiTags('user')
-@Controller('user')
+@Controller('api/user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
