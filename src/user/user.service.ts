@@ -70,7 +70,7 @@ export class UserService {
       );
     } catch (err) {
       console.error(err);
-      throw new AxiosError('토큰 요청 중 오류 발생');
+      throw new Error('토큰 요청 중 오류 발생');
     }
 
     if (site === 'google') {
@@ -83,7 +83,14 @@ export class UserService {
       }
       const result: JwtTokenInterface = await this.userSignUpOrLogin(userInfo);
       const jti: string = this.jwtService.decode(result.refreshToken);
-      await this.redis.set(jti, result.refreshToken);
+      const SEVEN_DAYS_IN_SECONDS = 60 * 60 * 24 * 7;
+      await this.redis.set(
+        jti,
+        result.refreshToken,
+        'EX',
+        SEVEN_DAYS_IN_SECONDS
+      );
+      return result;
     } else if (site === 'kakao') {
       const data = response.data as KakaoTokenResponse;
       return undefined;
@@ -101,6 +108,8 @@ export class UserService {
     const user = await this.userRepository.findOne({
       where: { email: userInfo.email },
     });
+
+    console.log(user);
 
     if (user == null) {
       const newUser = this.userRepository.create({

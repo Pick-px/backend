@@ -45,6 +45,8 @@ export class UserController {
       const at = token.accessToken;
       const rt = token.refreshToken;
 
+      console.log(typeof at);
+
       res.setHeader('Authorization', `Bearer ${at}`);
 
       res.cookie('refresh_token', rt, {
@@ -53,11 +55,10 @@ export class UserController {
         sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       });
-      return res.status(200).send();
+      res.status(200);
     } catch (err) {
-      const message: string = err.message;
-      console.log(err.message);
-      return res.send(404).send();
+      //   const message: string = err.message;
+      res.send(404);
     }
   }
 }
