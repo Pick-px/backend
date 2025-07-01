@@ -37,7 +37,7 @@ create table if not exists pixels
     canvas_id  integer                                        not null,
     x          integer                                        not null,
     y          integer                                        not null,
-    color      varchar(7) default 'FFFFFF'::character varying not null,
+    color      varchar(7) default '#FFFFFF'::character varying not null,
     created_at timestamp                                      not null,
     updated_at timestamp                                      not null,
     primary key (id),

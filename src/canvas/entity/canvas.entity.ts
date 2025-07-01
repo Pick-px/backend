@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { UserCanvas } from '../../entity/UserCanvas.entity';
 @Entity('canvases')
 export class Canvas {
   @PrimaryGeneratedColumn()
@@ -25,4 +25,7 @@ export class Canvas {
 
   @Column({ name: 'size_y' })
   sizeY: number;
+
+  @OneToMany(() => UserCanvas, (uc) => uc.canvas)
+  canvasUseres: UserCanvas[];
 }
