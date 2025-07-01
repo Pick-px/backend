@@ -15,20 +15,30 @@ export class CanvasService {
     @InjectRepository(Pixel)
     private readonly pixelRepository: Repository<Pixel>,
     @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis,
+    private readonly redisClient: Redis
   ) {}
 
   // 픽셀 저장 로직 (Redis만 사용)
-  async tryDrawPixel({ canvas_id, x, y, color }: { canvas_id: string, x: number, y: number, color: string }): Promise<boolean> {
+  async tryDrawPixel({
+    canvas_id,
+    x,
+    y,
+    color,
+  }: {
+    canvas_id: string;
+    x: number;
+    y: number;
+    color: string;
+  }): Promise<boolean> {
     try {
       const key = `${canvas_id}:${x}:${y}`;
-      
-      // Redis에 저장 
+
+      // Redis에 저장
       await this.redisClient.set(key, color);
-      
+
       // dirty_pixels set에 추가 (워커가 DB로 flush하기 위해)
       await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
-      
+
       console.log(`Redis: 픽셀 저장 성공: ${key} = ${color}`);
       return true;
     } catch (error) {
@@ -38,7 +48,9 @@ export class CanvasService {
   }
 
   // Redis에서 픽셀 조회
-  async getPixelsFromRedis(canvas_id: string): Promise<{ x: number; y: number; color: string }[]> {
+  async getPixelsFromRedis(
+    canvas_id: string
+  ): Promise<{ x: number; y: number; color: string }[]> {
     const keys = await this.redisClient.keys(`${canvas_id}:*`);
     if (keys.length === 0) return [];
     const pixels: { x: number; y: number; color: string }[] = [];
@@ -49,7 +61,7 @@ export class CanvasService {
         pixels.push({
           x: Number(x),
           y: Number(y),
-          color
+          color,
         });
       }
     }
@@ -57,23 +69,29 @@ export class CanvasService {
   }
 
   // DB에서 픽셀 조회
-  async getPixelsFromDB(canvas_id: string): Promise<{ x: number; y: number; color: string }[]> {
+  async getPixelsFromDB(
+    canvas_id: string
+  ): Promise<{ x: number; y: number; color: string }[]> {
     const dbPixels = await this.pixelRepository.find({
       where: { canvasId: Number(canvas_id) },
-      select: ['x', 'y', 'color']
+      select: ['x', 'y', 'color'],
     });
-    return dbPixels.map(pixel => ({
+    return dbPixels.map((pixel) => ({
       x: pixel.x,
       y: pixel.y,
-      color: pixel.color
+      color: pixel.color,
     }));
   }
 
   // 통합: Redis 우선, 없으면 DB + Redis 캐싱
-  async getAllPixels(canvas_id?: string): Promise<{ x: number; y: number; color: string }[]> {
+  async getAllPixels(
+    canvas_id?: string
+  ): Promise<{ x: number; y: number; color: string }[]> {
     let realCanvasId = canvas_id;
     if (!realCanvasId) {
-      const defaultCanvas = await this.canvasRepository.findOne({ order: { id: 'ASC' } });
+      const defaultCanvas = await this.canvasRepository.findOne({
+        order: { id: 'ASC' },
+      });
       realCanvasId = defaultCanvas?.id?.toString();
     }
     if (!realCanvasId) return [];
@@ -93,16 +111,20 @@ export class CanvasService {
   }
 
   // 특정 픽셀 조회 (Redis만 사용)
-  async getPixel(canvas_id: string, x: number, y: number): Promise<string | null> {
+  async getPixel(
+    canvas_id: string,
+    x: number,
+    y: number
+  ): Promise<string | null> {
     try {
       const key = `${canvas_id}:${x}:${y}`;
       const color = await this.redisClient.get(key);
-      
+
       if (color) {
         console.log(`Redis: 픽셀 조회 성공: ${key} = ${color}`);
         return color;
       }
-      
+
       console.log(`픽셀 없음: ${key}`);
       return null;
     } catch (error) {
@@ -139,20 +161,37 @@ export class CanvasService {
     }
   }
 
-  async applyDrawPixel({ canvas_id, x, y, color }: { canvas_id: string, x: number, y: number, color: string }): Promise<boolean> {
+  async applyDrawPixel({
+    canvas_id,
+    x,
+    y,
+    color,
+  }: {
+    canvas_id: string;
+    x: number;
+    y: number;
+    color: string;
+  }): Promise<boolean> {
     return this.tryDrawPixel({ canvas_id, x, y, color });
   }
 
   async getCanvasById(canvas_id?: string) {
     let realCanvasId = canvas_id;
     if (!realCanvasId) {
-      const canvases = await this.canvasRepository.find({ order: { id: 'ASC' }, take: 1 });
+      const canvases = await this.canvasRepository.find({
+        order: { id: 'ASC' },
+        take: 1,
+      });
       const defaultCanvas = canvases[0];
       realCanvasId = defaultCanvas?.id?.toString();
     }
     if (!realCanvasId) return null;
     const idNum = Number(realCanvasId);
     if (isNaN(idNum)) return null;
-    return this.canvasRepository.findOneBy({ id: idNum });
+    const canvas = await this.canvasRepository.findOneBy({ id: idNum });
+    return {
+      canvas_id: realCanvasId,
+      metaData: canvas,
+    };
   }
 }
