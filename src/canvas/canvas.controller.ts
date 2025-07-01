@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Query, Get } from '@nestjs/common';
+import { Body, Controller, Post, Query, Get, Res } from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
 import {
@@ -9,6 +9,8 @@ import {
   ApiQuery,
   ApiResponse,
 } from '@nestjs/swagger';
+import { Response } from 'express';
+import * as zlib from 'zlib';
 
 @ApiTags('api/canvas')
 @Controller('api/canvas')
@@ -41,12 +43,16 @@ export class CanvasController {
   })
   @ApiResponse({
     status: 200,
-    description: '픽셀 데이터 및 메타 정보 반환',
+    description: `
+      이 API는 gzip으로 압축된 JSON을 반환합니다.
+      응답 헤더에 Content-Encoding: gzip이 포함됩니다.
+      아래 예시는 압축 해제 후의 JSON 구조입니다.
+    `,
     schema: {
       example: {
         success: true,
-        canvas_id: '1',
         data: {
+          canvas_id: '1',
           pixels: [
             { x: 100, y: 200, color: '#ff0000' },
             { x: 101, y: 201, color: '#00ff00' },
@@ -62,7 +68,7 @@ export class CanvasController {
     },
   })
   @Get('pixels')
-  async getAllPixels(@Query('canvas_id') canvas_id?: string) {
+  async getAllPixels(@Res() res: Response, @Query('canvas_id') canvas_id?: string) {
     // 픽셀 데이터 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
     const pixels = await this.canvasService.getAllPixels(canvas_id);
 
@@ -73,9 +79,7 @@ export class CanvasController {
     const id = canvas.canvas_id;
     const meta = canvas.metaData;
 
-    const id = canvas.canvas_id;
-    const meta = canvas.metaData;
-    return {
+    const responseData = {
       success: true,
       data: {
         canvas_id: id,
@@ -88,6 +92,14 @@ export class CanvasController {
         },
       },
     };
+
+    const json = JSON.stringify(responseData);
+    const gzipped = zlib.gzipSync(json);
+    res.set({
+      'Content-Type': 'application/json',
+      'Content-Encoding': 'gzip',
+    });
+    res.send(gzipped);
   }
 
   @Get('default')

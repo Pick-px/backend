@@ -54,10 +54,10 @@ async function flushDirtyPixels() {
   }
 }
 
-// 10초마다 실행
+// 30초초마다 실행
 const flushInterval = setInterval(() => {
   flushDirtyPixels().catch(console.error);
-}, 10000);
+}, 30000);
 
 // 프로세스 종료 시 정리
 process.on('SIGTERM', async () => {
@@ -130,7 +130,7 @@ void (async () => {
               pixel.y = y;
               pixel.createdAt = created_at;
               pixel.updatedAt = updated_at;
-              pixel.color = 'FFFFFF';
+              pixel.color = '#FFFFFF';
               pixels.push(pixel);
             }
           }
