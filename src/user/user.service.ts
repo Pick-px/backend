@@ -35,11 +35,6 @@ interface GoogleUserPayload {
   userName: string;
 }
 
-interface JwtTokenInterface {
-  accessToken: string;
-  refreshToken: string;
-}
-
 @Injectable()
 export class UserService {
   constructor(
@@ -54,7 +49,7 @@ export class UserService {
 
   async OAuthCodeCheck(
     query: OAuthCallbackDto
-  ): Promise<JwtTokenInterface | undefined> {
+  ): Promise<{ access_token: string; refresh_token: string } | undefined> {
     const code = query.code;
     const site = query.state || '';
     const payload = this.generateParam(code, site);
@@ -69,7 +64,8 @@ export class UserService {
         })
       );
     } catch (err) {
-      console.error(err);
+      console.log('에러발생');
+      //console.error(err);
       throw new Error('토큰 요청 중 오류 발생');
     }
 
@@ -81,12 +77,13 @@ export class UserService {
       if (userInfo == null) {
         throw new Error('not verified user in google');
       }
-      const result: JwtTokenInterface = await this.userSignUpOrLogin(userInfo);
-      const jti: string = this.jwtService.decode(result.refreshToken);
+      const result: { access_token: string; refresh_token: string } =
+        await this.userSignUpOrLogin(userInfo);
+      const jti: string = this.jwtService.decode(result.refresh_token);
       const SEVEN_DAYS_IN_SECONDS = 60 * 60 * 24 * 7;
       await this.redis.set(
         jti,
-        result.refreshToken,
+        result.refresh_token,
         'EX',
         SEVEN_DAYS_IN_SECONDS
       );
@@ -102,9 +99,10 @@ export class UserService {
     }
   }
 
-  private async userSignUpOrLogin(
-    userInfo: GoogleUserPayload
-  ): Promise<JwtTokenInterface> {
+  private async userSignUpOrLogin(userInfo: GoogleUserPayload): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
     const user = await this.userRepository.findOne({
       where: { email: userInfo.email },
     });
@@ -115,20 +113,21 @@ export class UserService {
         updatedAt: new Date(),
         userName: userInfo.userName,
       });
-      const result = await this.userRepository.save(newUser);
-      const at = this.authService.generateAccessJWT(result.email);
-      const rt = this.authService.generateRefreshJWT(result.email);
-      return {
-        accessToken: at,
-        refreshToken: rt,
-      };
+      try {
+        const result = await this.userRepository.save(newUser);
+        const token = this.authService.generateJWT(result.email);
+        return token;
+      } catch (err) {
+        const existUser = await this.userRepository.findOne({
+          where: { email: newUser.email },
+        });
+
+        if (!existUser) throw new Error('동시성 문제 발생!');
+
+        return this.authService.generateJWT(existUser.email);
+      }
     } else {
-      const at = this.authService.generateAccessJWT(user.email);
-      const rt = this.authService.generateRefreshJWT(user.email);
-      return {
-        accessToken: at,
-        refreshToken: rt,
-      };
+      return this.authService.generateJWT(user.email);
     }
   }
 
@@ -197,12 +196,12 @@ export class UserService {
     });
   }
 
-  async findById(user_id: string) {
+  async findById(user_id: string): Promise<User> {
     const result = await this.userRepository.findOne({
       where: { email: user_id },
     });
     if (!result) throw new Error('유저 정보가 없습니다.');
 
-    return result.email;
+    return result;
   }
 }

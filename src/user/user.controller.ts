@@ -42,8 +42,8 @@ export class UserController {
       const token = await this.userService.OAuthCodeCheck(query);
       if (!token) throw new InternalServerErrorException('Token 발급 실패');
 
-      const at = token.accessToken;
-      const rt = token.refreshToken;
+      const at = token.access_token;
+      const rt = token.refresh_token;
 
       console.log(typeof at);
 
@@ -51,8 +51,8 @@ export class UserController {
 
       res.cookie('refresh_token', rt, {
         httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
+        secure: true,
+        sameSite: 'None',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       });
       res.status(200);
