@@ -60,6 +60,8 @@ export class UserService {
     const payload = this.generateParam(code, site);
     const url = this.generateUrl(site);
     let response: { data: CommonTokenResponse };
+    console.log('payload', payload);
+    console.log('url', url);
     try {
       response = await firstValueFrom(
         this.httpService.post(url, payload.toString(), {
@@ -68,8 +70,10 @@ export class UserService {
           },
         })
       );
+      console.log('response', response);
     } catch (err) {
-      console.error(err);
+      console.log("에러발생");
+      //console.error(err);
       throw new Error('토큰 요청 중 오류 발생');
     }
 
@@ -90,6 +94,7 @@ export class UserService {
         'EX',
         SEVEN_DAYS_IN_SECONDS
       );
+      console.log('result', result);
       return result;
     } else if (site === 'kakao') {
       const data = response.data as KakaoTokenResponse;

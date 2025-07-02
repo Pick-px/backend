@@ -6,6 +6,7 @@ import { Canvas } from './entity/canvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { pixelQueue } from '../queues/bullmq.queue';
+import { Group } from '../group/entity/group.entity';
 
 @Injectable()
 export class CanvasService {
@@ -14,6 +15,8 @@ export class CanvasService {
     private readonly canvasRepository: Repository<Canvas>,
     @InjectRepository(Pixel)
     private readonly pixelRepository: Repository<Pixel>,
+    @InjectRepository(Group)
+    private readonly groupRepository: Repository<Group>,
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis
   ) {}
@@ -157,6 +160,18 @@ export class CanvasService {
         created_at: new Date(),
         updated_at: new Date(),
       });
+      //그룹 자동 생성
+      const group = this.groupRepository.create({
+        name: `canvas_${newCanvas.id}_global`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        maxParticipants: 100,
+        currentParticipantsCount: 1,
+        canvasId: newCanvas.id,
+        madeBy: 1, // TODO: 실제 서비스에서는 로그인 유저 id로 대체
+      });
+      await this.groupRepository.save(group);
+      // =====================
       return newCanvas;
     } catch (err) {
       console.error(err);
