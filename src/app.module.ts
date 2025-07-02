@@ -16,7 +16,8 @@ import { Canvas } from './canvas/entity/canvas.entity';
 import { GroupController } from './group/group.controller';
 import { GroupService } from './group/group.service';
 import { GroupModule } from './group/group.module';
-
+import { Group } from './group/entity/group.entity';
+import { GroupUser } from './entity/GroupUser.entity';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -31,7 +32,7 @@ import { GroupModule } from './group/group.module';
       password: 'teamgmgdogs',
       database: 'pick_px',
       autoLoadEntities: true,
-      entities: [User, Canvas, UserCanvas, Pixel],
+      entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
     }),
     RedisModule,
     CanvasModule,

@@ -68,7 +68,10 @@ export class CanvasController {
     },
   })
   @Get('pixels')
-  async getAllPixels(@Res() res: Response, @Query('canvas_id') canvas_id?: string) {
+  async getAllPixels(
+    @Res() res: Response,
+    @Query('canvas_id') canvas_id?: string
+  ) {
     // 픽셀 데이터 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
     const pixels = await this.canvasService.getAllPixels(canvas_id);
 
@@ -130,7 +133,6 @@ export class CanvasController {
       return {
         success: true,
         data: {
-
           id: canvas.canvas_id,
           title: canvasMetaData.title,
           type: canvasMetaData.type,
