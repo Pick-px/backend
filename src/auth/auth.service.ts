@@ -6,8 +6,11 @@ import { randomUUID } from 'crypto';
 export class AuthService {
   constructor(private readonly jwtService: JwtService) {}
 
-  generateAccessJWT(user_id: string): string {
-    const payload = { sub: user_id };
+  generateAccessJWT(user_id: string, userName: string): string {
+    const payload = {
+      sub: { userId: user_id, nickName: userName },
+      jti: randomUUID(),
+    };
     return this.jwtService.sign(payload, { expiresIn: '15m' });
   }
 
@@ -16,13 +19,17 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '7d' });
   }
 
-  generateJWT(user_id: string): {
+  generateJWT(
+    user_id: number,
+    userName: string
+  ): {
     access_token: string;
     refresh_token: string;
   } {
+    const _id = user_id.toString();
     return {
-      access_token: this.generateAccessJWT(user_id),
-      refresh_token: this.generateRefreshJWT(user_id),
+      access_token: this.generateAccessJWT(_id, userName),
+      refresh_token: this.generateRefreshJWT(_id),
     };
   }
 

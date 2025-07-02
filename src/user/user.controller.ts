@@ -15,7 +15,6 @@ import { UserService } from './user.service';
 import { Response } from 'express';
 import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
 
-
 @ApiTags('api/user')
 @Controller('api/user')
 export class UserController {
@@ -46,14 +45,12 @@ export class UserController {
       const at = token.access_token;
       const rt = token.refresh_token;
 
-      console.log(typeof at);
-
       res.setHeader('Authorization', `Bearer ${at}`);
 
       res.cookie('refresh_token', rt, {
         httpOnly: true,
         secure: true,
-        sameSite: 'None',
+        sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       });
       res.status(200);

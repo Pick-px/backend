@@ -30,19 +30,28 @@ async function flushDirtyPixels() {
       const dirtyPixels = await redis.smembers(dirtyKey);
       if (dirtyPixels.length === 0) continue;
 
-      console.log(`[Worker] Flushing ${dirtyPixels.length} dirty pixels for canvas ${canvas.id}`);
+      console.log(
+        `[Worker] Flushing ${dirtyPixels.length} dirty pixels for canvas ${canvas.id}`
+      );
 
       for (const xy of dirtyPixels) {
         const [x, y] = xy.split(':');
         const color = await redis.get(`${canvas.id}:${x}:${y}`);
         if (!color) continue;
-        
-        let pixel = await pixelRepo.findOne({ where: { canvasId: canvas.id, x: Number(x), y: Number(y) } });
+
+        let pixel = await pixelRepo.findOne({
+          where: { canvasId: canvas.id, x: Number(x), y: Number(y) },
+        });
         if (pixel) {
           pixel.color = color;
           await pixelRepo.save(pixel);
         } else {
-          await pixelRepo.save({ canvasId: canvas.id, x: Number(x), y: Number(y), color });
+          await pixelRepo.save({
+            canvasId: canvas.id,
+            x: Number(x),
+            y: Number(y),
+            color,
+          });
         }
       }
       // flush 후 dirty set 비우기
@@ -93,7 +102,7 @@ process.on('SIGINT', async () => {
 void (async () => {
   try {
     console.log('[Worker] 워커 프로세스 시작...');
-    
+
     // Redis 연결 - 개선된 설정 사용
     redis = new Redis({
       ...redisConnection,
@@ -101,24 +110,27 @@ void (async () => {
       connectTimeout: 30000, // 30초로 늘림
       maxRetriesPerRequest: 3,
     });
-    
+
     // Redis 연결 테스트
     await redis.ping();
     console.log('[Worker] Redis 연결 성공');
-    
+
     // DataSource 초기화
     await AppDataSource.initialize();
     console.log('[Worker] DataSource 초기화 완료');
-    
+
     // 워커 생성
     worker = new Worker<PixelGenerationJobData>(
       'pixel-generation',
       async (job) => {
         try {
           const start = Date.now();
-          const { canvas_id, size_x, size_y, created_at, updated_at } = job.data;
+          const { canvas_id, size_x, size_y, created_at, updated_at } =
+            job.data;
 
-          console.log(`[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`);
+          console.log(
+            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
+          );
 
           const pixels: Pixel[] = [];
 
@@ -147,10 +159,10 @@ void (async () => {
               .values(chunk)
               .execute();
           }
-          
+
           const duration = Date.now() - start;
           console.log(
-            `[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`,
+            `[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`
           );
         } catch (error) {
           console.error(`[Worker] Job 처리 중 에러:`, error);
@@ -166,7 +178,7 @@ void (async () => {
         },
         removeOnComplete: { count: 100 }, // 완료된 job 100개만 유지
         removeOnFail: { count: 50 }, // 실패한 job 50개만 유지
-      },
+      }
     );
 
     // 워커 이벤트 리스너
@@ -183,7 +195,6 @@ void (async () => {
     });
 
     console.log('[Worker] 워커 시작 완료, job 대기 중...');
-
   } catch (error) {
     console.error('[Worker] 초기화 실패:', error);
     process.exit(1);
