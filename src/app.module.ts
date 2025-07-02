@@ -13,6 +13,9 @@ import { UserCanvas } from './entity/UserCanvas.entity';
 import { Pixel } from './pixel/entity/pixel.entity';
 import { User } from './user/entity/user.entity';
 import { Canvas } from './canvas/entity/canvas.entity';
+import { GroupController } from './group/group.controller';
+import { GroupService } from './group/group.service';
+import { GroupModule } from './group/group.module';
 
 @Module({
   imports: [
@@ -28,7 +31,6 @@ import { Canvas } from './canvas/entity/canvas.entity';
       password: 'teamgmgdogs',
       database: 'pick_px',
       autoLoadEntities: true,
-      synchronize: true,
       entities: [User, Canvas, UserCanvas, Pixel],
     }),
     RedisModule,
@@ -36,8 +38,9 @@ import { Canvas } from './canvas/entity/canvas.entity';
     DatabaseModule,
     UserModule,
     AuthModule,
+    GroupModule,
   ],
-  controllers: [AppController, UserController],
-  providers: [AppService],
+  controllers: [AppController, UserController, GroupController],
+  providers: [AppService, GroupService],
 })
 export class AppModule {}
