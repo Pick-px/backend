@@ -58,11 +58,11 @@ export class GroupGateway {
   // 클라이언트가 특정 그룹 채팅방에 입장할 때 호출
   @SubscribeMessage('join_chat')
   async handleJoinChat(
-    @MessageBody() data: { group_id: string; user_id: string },
+    @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
     const userIdFromToken = this.getUserIdFromSocket(client);
-    if (!userIdFromToken || userIdFromToken !== Number(data.user_id)) {
+    if (!userIdFromToken) {
       client.emit('chat-error', { message: '인증 정보가 올바르지 않습니다.' });
       return;
     }
@@ -75,18 +75,35 @@ export class GroupGateway {
       client.emit('chat-error', { message: '이 채팅방에 참여할 권한이 없습니다.' });
       return;
     }
+    // 기존 group_id 룸에서 leave (canvas_id 룸은 유지)
+    const currentRooms = Array.from(client.rooms);
+    for (const room of currentRooms) {
+      if (room !== client.id && room !== data.group_id && !room.startsWith('canvas_')) {
+        client.leave(room);
+      }
+    }
     client.join(data.group_id);
+  }
+
+  // 채팅방에서 나갈 때 호출
+  @SubscribeMessage('leave_chat')
+  async handleLeaveChat(
+    @MessageBody() data: { group_id: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    // group_id 룸에서 leave
+    client.leave(data.group_id);
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
   @SubscribeMessage('send_chat')
   async handleSendChat(
-    @MessageBody() body: { group_id: string; user_id: string; message: string },
+    @MessageBody() body: { group_id: string; message: string },
     @ConnectedSocket() client: Socket
   ) {
     try {
       const userIdFromToken = this.getUserIdFromSocket(client);
-      if (!userIdFromToken || userIdFromToken !== Number(body.user_id)) {
+      if (!userIdFromToken) {
         client.emit('chat-error', { message: '인증 정보가 올바르지 않습니다.' });
         return;
       }
@@ -102,7 +119,8 @@ export class GroupGateway {
       // Redis에 메시지 push (lpush chat:{group_id})
       const now = new Date();
       const chatPayload = {
-        id: Date.now(), // 임시 ID, flush 시 DB ID로 대체
+        // Redis에 저장되는 채팅 메시지의 id는 Date.now()로 임시로 부여됨, flush 시 DB에 저장할 때는 실제 DB의 auto-increment id가 부여됨
+        id: Date.now(),
         user: { id: userIdFromToken, user_name: isMember.user.userName },
         message: body.message,
         created_at: now.toISOString(),

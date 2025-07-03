@@ -118,7 +118,7 @@ export class CanvasService {
     return dbPixels;
   }
 
-  // 특정 픽셀 조회 (Redis만 사용)
+  // 특정 픽셀 조회 (Redis만 사용) - Todo : 소유자 확인
   async getPixel(
     canvas_id: string,
     x: number,
@@ -141,9 +141,11 @@ export class CanvasService {
     }
   }
 
+  // 캔버스 생성 함수
   async createCanvas(createCanvasDto: createCanvasDto): Promise<Canvas | null> {
     const { title, type, size_x, size_y, endedAt } = createCanvasDto;
 
+    // 캔버스 엔티티 생성
     const canvas = this.canvasRepository.create({
       title: title,
       type: type,
@@ -154,7 +156,9 @@ export class CanvasService {
     });
 
     try {
+      // 캔버스 저장
       const newCanvas = await this.canvasRepository.save(canvas);
+      // 픽셀 생성 작업 큐에 추가
       await pixelQueue.add('pixel-generation', {
         canvas_id: newCanvas.id,
         size_x,
@@ -167,12 +171,13 @@ export class CanvasService {
         name: '전체',
         createdAt: new Date(),
         updatedAt: new Date(),
-        maxParticipants: 100, // 전체 채팅... 나중에 숫자 늘려야 할수도
+        maxParticipants: 100, // 전체 채팅 최대 인원(추후 변경 가능)
         currentParticipantsCount: 1,
         canvasId: newCanvas.id,
-        madeBy: 1, // 항상 1번 관리자 계정으로 고정
+        madeBy: 1, // 1번 관리자 계정으로 고정
         is_default: true,
       });
+      // 그룹 저장
       const savedGroup = await this.groupRepository.save(group);
       // 관리자(1번) 유저를 group_users에 추가
       const groupUser = new GroupUser();
@@ -180,7 +185,7 @@ export class CanvasService {
       groupUser.user = { id: 1 } as User;
       groupUser.joinedAt = new Date();
       await this.groupRepository.manager.save(GroupUser, groupUser);
-      // =====================
+      // 캔버스 생성 완료 반환
       return newCanvas;
     } catch (err) {
       console.error(err);
@@ -188,6 +193,7 @@ export class CanvasService {
     }
   }
 
+  // 픽셀 그리기 적용 함수
   async applyDrawPixel({
     canvas_id,
     x,
@@ -202,9 +208,11 @@ export class CanvasService {
     return this.tryDrawPixel({ canvas_id, x, y, color });
   }
 
+  // 캔버스 ID로 캔버스 정보 조회
   async getCanvasById(canvas_id?: string) {
     let realCanvasId = canvas_id;
     if (!realCanvasId) {
+      // 기본 캔버스 조회
       const canvases = await this.canvasRepository.find({
         order: { id: 'ASC' },
         take: 1,
@@ -215,6 +223,7 @@ export class CanvasService {
     if (!realCanvasId) return null;
     const idNum = Number(realCanvasId);
     if (isNaN(idNum)) return null;
+    // 메타데이터 조회
     const meta = await this.canvasRepository.findOneBy({ id: idNum });
     return {
       canvas_id: realCanvasId,
