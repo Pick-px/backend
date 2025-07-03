@@ -149,6 +149,7 @@ export class GroupService {
         throw new ConflictException('그룹에 가입되어 있지 않습니다.');
       }
       group.currentParticipantsCount -= 1;
+      await this.dataSource.manager.save(group);
       await this.dataSource.manager.remove(groupUser);
     }
   }
