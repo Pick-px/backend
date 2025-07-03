@@ -1,7 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 import { Canvas } from '../../canvas/entity/canvas.entity';
-import { User } from '../../user/entity/user.entity';
+import { GroupUser } from '../../entity/GroupUser.entity';
 
+@Unique(['id', 'name'])
 @Entity('groups')
 export class Group {
   @PrimaryGeneratedColumn({ type: 'bigint' })
@@ -35,8 +46,6 @@ export class Group {
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'made_by' })
-  madeByUser: User;
-
-} 
+  @OneToMany(() => GroupUser, (gu) => gu.group)
+  groupUsers: GroupUser[];
+}

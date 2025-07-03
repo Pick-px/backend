@@ -65,7 +65,6 @@ export class UserService {
           },
         })
       );
-      console.log('response', response);
     } catch (err) {
       console.log('에러발생');
       //console.error(err);
@@ -119,7 +118,7 @@ export class UserService {
       });
       try {
         const result = await this.userRepository.save(newUser);
-        const token = this.authService.generateJWT(result.email);
+        const token = this.authService.generateJWT(result.id, result.userName);
         return token;
       } catch (err) {
         const existUser = await this.userRepository.findOne({
@@ -128,10 +127,10 @@ export class UserService {
 
         if (!existUser) throw new Error('동시성 문제 발생!');
 
-        return this.authService.generateJWT(existUser.email);
+        return this.authService.generateJWT(existUser.id, existUser.userName);
       }
     } else {
-      return this.authService.generateJWT(user.email);
+      return this.authService.generateJWT(user.id, user.userName);
     }
   }
 
@@ -202,7 +201,7 @@ export class UserService {
 
   async findById(user_id: string): Promise<User> {
     const result = await this.userRepository.findOne({
-      where: { email: user_id },
+      where: { id: Number(user_id) },
     });
     if (!result) throw new Error('유저 정보가 없습니다.');
 

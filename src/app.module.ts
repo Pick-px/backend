@@ -16,11 +16,9 @@ import { Canvas } from './canvas/entity/canvas.entity';
 import { GroupController } from './group/group.controller';
 import { GroupService } from './group/group.service';
 import { GroupModule } from './group/group.module';
-import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from './auth/jwt.strategy';
-import { JwtModule } from '@nestjs/jwt';
+import { Group } from './group/entity/group.entity';
+import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
-import { forwardRef } from '@nestjs/common';
 
 @Module({
   imports: [
@@ -36,7 +34,7 @@ import { forwardRef } from '@nestjs/common';
       password: 'teamgmgdogs',
       database: 'pick_px',
       autoLoadEntities: true,
-      entities: [User, Canvas, UserCanvas, Pixel],
+      entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
     }),
     RedisModule,
     CanvasModule,
@@ -44,13 +42,9 @@ import { forwardRef } from '@nestjs/common';
     UserModule,
     AuthModule,
     GroupModule,
-    PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-    }),
     HttpModule,
   ],
   controllers: [AppController, UserController, GroupController],
-  providers: [AppService, GroupService, JwtStrategy],
+  providers: [AppService, GroupService],
 })
 export class AppModule {}

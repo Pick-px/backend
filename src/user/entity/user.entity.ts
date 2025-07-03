@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
+import { GroupUser } from '../../entity/GroupUser.entity';
 
 @Entity('users')
 export class User {
@@ -23,4 +24,7 @@ export class User {
 
   @OneToMany(() => UserCanvas, (uc) => uc.user)
   userCanvases: UserCanvas[];
+
+  @OneToMany(() => GroupUser, (gu) => gu.user)
+  groupUsers: GroupUser[];
 }

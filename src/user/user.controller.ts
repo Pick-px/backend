@@ -15,7 +15,6 @@ import { UserService } from './user.service';
 import { Response } from 'express';
 import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
 
-
 @ApiTags('api/user')
 @Controller('api/user')
 export class UserController {
@@ -45,8 +44,6 @@ export class UserController {
 
       const at = token.access_token;
       const rt = token.refresh_token;
-
-      console.log(typeof at);
 
       res.setHeader('Authorization', `Bearer ${at}`);
 

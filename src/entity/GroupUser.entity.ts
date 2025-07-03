@@ -16,6 +16,6 @@ export class GroupUser {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'joined_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'joined_at', type: 'timestamp' })
   joinedAt: Date;
 } 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
@@ -10,8 +10,7 @@ import { GroupUser } from '../entity/GroupUser.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
 import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from '../auth/jwt.strategy';
-
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -22,8 +21,9 @@ import { JwtStrategy } from '../auth/jwt.strategy';
     }),
     UserModule,
     PassportModule,
+    forwardRef(() => AuthModule),
   ],
-  providers: [GroupService, GroupGateway, JwtStrategy],
+  providers: [GroupService, GroupGateway],
   controllers: [GroupController],
   exports: [GroupService, TypeOrmModule],
 })
