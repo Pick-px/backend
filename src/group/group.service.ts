@@ -27,11 +27,11 @@ export class GroupService {
     return group ? group.id : null;
   }
 
-  async getRecentChatsByGroupId(groupId: number): Promise<Chat[]> {
+  async getRecentChatsByGroupId(groupId: number, take: number): Promise<Chat[]> {
     return this.groupRepository.manager.find(Chat, {
       where: { groupId },
       order: { createdAt: 'DESC' },
-      take: 50,
+      take,
       relations: ['user'],
     });
   }
@@ -133,8 +133,10 @@ export class GroupService {
     });
     if (!user) throw new ConflictException('유저가 존재하지 않습니다.');
 
+    console.log(group.madeBy, user.id);
+    console.log("group.id type: ",typeof group.madeBy, "user.id type: ", typeof user.id);
     // 그룹 삭제
-    if (group.madeBy === user.id) {
+    if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);
     } else {
       // 그룹 탈퇴
@@ -188,5 +190,38 @@ export class GroupService {
       })
       .setParameter('userId', _id)
       .getMany();
+  }
+
+  // 특정 유저가 참여 중인 모든 그룹을 반환
+  async findGroupsByUserId(userId: number): Promise<Group[]> {
+    const groupUsers = await this.dataSource.getRepository(GroupUser).find({
+      where: { user: { id: userId } },
+      relations: ['group'],
+    });
+    return groupUsers.map(gu => gu.group);
+  }
+
+  // 캔버스 ID로 해당 캔버스의 모든 그룹을 반환
+  async findGroupsByCanvasId(canvasId: number): Promise<Group[]> {
+    return this.groupRepository.find({ where: { canvasId } });
+  }
+
+  // 캔버스 ID로 전체 채팅방(기본 그룹, is_default=true) 반환
+  async findDefaultGroupByCanvasId(canvasId: number): Promise<Group | null> {
+    return this.groupRepository.findOne({ where: { canvasId, is_default: true } });
+  }
+
+  // 그룹 ID로 그룹 엔티티 반환
+  async findGroupById(groupId: number): Promise<Group | null> {
+    return this.groupRepository.findOne({ where: { id: groupId } });
+  }
+
+  // 유저가 해당 그룹에 속해있는지 여부 반환
+  async isUserInGroup(userId: number, groupId: number): Promise<boolean> {
+    const groupUser = await this.dataSource.getRepository(GroupUser).findOne({
+      where: { user: { id: userId }, group: { id: groupId } },
+      relations: ['user', 'group'],
+    });
+    return !!groupUser;
   }
 }

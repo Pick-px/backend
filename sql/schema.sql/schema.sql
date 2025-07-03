@@ -78,6 +78,7 @@ create table if not exists groups
     current_participants_count int not null default 1,
     canvas_id bigint not null,
     made_by bigint not null,
+    is_default boolean not null default false,
     primary key (id),
     unique (name),
     constraint fk_canvas
@@ -123,4 +124,9 @@ create table if not exists chats
 
 alter table chats
     owner to pixel_user;
+
+-- 관리자 계정 seed (id=1, email=pickpx0617@gmail.com, user_name=gmg team)
+INSERT INTO users (id, email, password, created_at, updated_at, user_name)
+VALUES (1, 'pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
+ON CONFLICT (id) DO NOTHING;
 

@@ -7,6 +7,8 @@ import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { pixelQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
+import { GroupUser } from '../entity/GroupUser.entity';
+import { User } from '../user/entity/user.entity';
 
 @Injectable()
 export class CanvasService {
@@ -160,17 +162,24 @@ export class CanvasService {
         created_at: new Date(),
         updated_at: new Date(),
       });
-      //그룹 자동 생성
+      // 캔버스별 전체 채팅 그룹 자동 생성
       const group = this.groupRepository.create({
-        name: `canvas_${newCanvas.id}_global`,
+        name: '전체',
         createdAt: new Date(),
         updatedAt: new Date(),
-        maxParticipants: 100,
+        maxParticipants: 100, // 전체 채팅... 나중에 숫자 늘려야 할수도
         currentParticipantsCount: 1,
         canvasId: newCanvas.id,
-        madeBy: 1, // TODO: 실제 서비스에서는 로그인 유저 id로 대체
+        madeBy: 1, // 항상 1번 관리자 계정으로 고정
+        is_default: true,
       });
-      await this.groupRepository.save(group);
+      const savedGroup = await this.groupRepository.save(group);
+      // 관리자(1번) 유저를 group_users에 추가
+      const groupUser = new GroupUser();
+      groupUser.group = savedGroup;
+      groupUser.user = { id: 1 } as User;
+      groupUser.joinedAt = new Date();
+      await this.groupRepository.manager.save(GroupUser, groupUser);
       // =====================
       return newCanvas;
     } catch (err) {

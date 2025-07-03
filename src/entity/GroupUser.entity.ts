@@ -1,25 +1,21 @@
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, ManyToOne, Column, Unique, JoinColumn } from 'typeorm';
 import { Group } from '../group/entity/group.entity';
 import { User } from '../user/entity/user.entity';
 
 @Entity('group_users')
+@Unique(['group', 'user'])
 export class GroupUser {
-  @PrimaryGeneratedColumn()
-  id: bigint;
+  @PrimaryGeneratedColumn('increment', { type: 'bigint' })
+  id: number;
 
-  @ManyToOne(() => User, (user) => user.groupUsers)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
-  @ManyToOne(() => Group, (group) => group.groupUsers)
+  @ManyToOne(() => Group, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @Column({ type: 'timestamp', name: 'joined_at' })
-  join: Date;
-}
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @Column({ name: 'joined_at', type: 'timestamp' })
+  joinedAt: Date;
+} 

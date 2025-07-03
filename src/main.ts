@@ -13,6 +13,7 @@ async function bootstrap() {
       .setDescription('Pick-Px 백엔드 API 문서입니다.')
       .setVersion('1.0')
       .addTag('canvas', 'user')
+      .addBearerAuth()
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

@@ -18,6 +18,8 @@ import { GroupService } from './group/group.service';
 import { GroupModule } from './group/group.module';
 import { Group } from './group/entity/group.entity';
 import { GroupUser } from './entity/GroupUser.entity';
+import { HttpModule } from '@nestjs/axios';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -40,6 +42,7 @@ import { GroupUser } from './entity/GroupUser.entity';
     UserModule,
     AuthModule,
     GroupModule,
+    HttpModule,
   ],
   controllers: [AppController, UserController, GroupController],
   providers: [AppService, GroupService],

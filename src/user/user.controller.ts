@@ -50,7 +50,7 @@ export class UserController {
       res.cookie('refresh_token', rt, {
         httpOnly: true,
         secure: true,
-        sameSite: 'strict',
+        sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       });
       res.status(200);
