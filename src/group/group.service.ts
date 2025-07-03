@@ -1,12 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  QueryFailedError,
-  Repository,
-  DataSource,
-  ILike,
-  LessThan,
-} from 'typeorm';
+import { QueryFailedError, Repository, DataSource } from 'typeorm';
 import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
@@ -27,7 +21,10 @@ export class GroupService {
     return group ? group.id : null;
   }
 
-  async getRecentChatsByGroupId(groupId: number, take: number): Promise<Chat[]> {
+  async getRecentChatsByGroupId(
+    groupId: number,
+    take: number
+  ): Promise<Chat[]> {
     return this.groupRepository.manager.find(Chat, {
       where: { groupId },
       order: { createdAt: 'DESC' },
@@ -134,7 +131,12 @@ export class GroupService {
     if (!user) throw new ConflictException('유저가 존재하지 않습니다.');
 
     console.log(group.madeBy, user.id);
-    console.log("group.id type: ",typeof group.madeBy, "user.id type: ", typeof user.id);
+    console.log(
+      'group.id type: ',
+      typeof group.madeBy,
+      'user.id type: ',
+      typeof user.id
+    );
     // 그룹 삭제
     if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);
@@ -198,7 +200,7 @@ export class GroupService {
       where: { user: { id: userId } },
       relations: ['group'],
     });
-    return groupUsers.map(gu => gu.group);
+    return groupUsers.map((gu) => gu.group);
   }
 
   // 캔버스 ID로 해당 캔버스의 모든 그룹을 반환
@@ -208,7 +210,9 @@ export class GroupService {
 
   // 캔버스 ID로 전체 채팅방(기본 그룹, is_default=true) 반환
   async findDefaultGroupByCanvasId(canvasId: number): Promise<Group | null> {
-    return this.groupRepository.findOne({ where: { canvasId, is_default: true } });
+    return this.groupRepository.findOne({
+      where: { canvasId, is_default: true },
+    });
   }
 
   // 그룹 ID로 그룹 엔티티 반환

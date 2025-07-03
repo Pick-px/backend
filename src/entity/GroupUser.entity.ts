@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, ManyToOne, Column, Unique, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  Column,
+  Unique,
+  JoinColumn,
+} from 'typeorm';
 import { Group } from '../group/entity/group.entity';
 import { User } from '../user/entity/user.entity';
 
@@ -18,4 +25,4 @@ export class GroupUser {
 
   @Column({ name: 'joined_at', type: 'timestamp' })
   joinedAt: Date;
-} 
+}

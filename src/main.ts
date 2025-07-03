@@ -2,9 +2,18 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import * as dotenv from 'dotenv';
+const cookieParser = require('cookie-parser');
+dotenv.config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const secret: string | undefined = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('❌ 환경변수 JWT_SECRET이 설정되지 않았습니다.');
+  }
+  app.use(cookieParser(secret));
   app.useWebSocketAdapter(new IoAdapter(app));
 
   try {

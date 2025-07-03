@@ -42,7 +42,7 @@ async function flushDirtyPixels() {
         const color = await redis.get(`${canvas.id}:${x}:${y}`);
         if (!color) continue;
 
-        let pixel = await pixelRepo.findOne({
+        const pixel = await pixelRepo.findOne({
           where: { canvasId: canvas.id, x: Number(x), y: Number(y) },
         });
         if (pixel) {
@@ -105,10 +105,10 @@ process.on('SIGINT', async () => {
 void (async () => {
   try {
     console.log('[Worker] 워커 프로세스 시작...');
-    
+
     // Redis 연결 - 개선된 설정
     redis = new Redis(redisConnection);
-    
+
     // Redis 연결 테스트
     await redis.ping();
     console.log('[Worker] Redis 연결 성공');
