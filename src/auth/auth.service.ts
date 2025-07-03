@@ -81,14 +81,10 @@ export class AuthService {
       if (!user) throw new NotFoundException('유저가 없습니다.');
 
       const token = await this.generateJWT(user.id, user.userName);
-      const jti: string = this.jwtService.decode(token.refresh_token);
-      const SEVEN_DAYS_IN_SECONDS = 60 * 60 * 24 * 7;
-      await this.redisClient.set(
-        jti,
-        token.refresh_token,
-        'EX',
-        SEVEN_DAYS_IN_SECONDS
+      const payload: JwtPayload = this.jwtService.decode<JwtPayload>(
+        token.refresh_token
       );
+      await this.setRefreshTokenInRedis(payload.jti, token.refresh_token);
       return token;
     } catch (err) {
       throw new UnauthorizedException('토큰 재발급에 실패했습니다.');
