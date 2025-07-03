@@ -37,7 +37,7 @@ export class GroupGateway {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    private readonly jwtService: JwtService,
+    private readonly jwtService: JwtService
   ) {
     this.redisClient = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
   }
@@ -48,8 +48,8 @@ export class GroupGateway {
       const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
       if (!token) return null;
       const payload = this.jwtService.decode(token) as any;
-      // sub 또는 email 등 정책에 따라
-      return Number(payload?.sub || payload?.userId || payload?.id);
+      // JWT payload 구조: { sub: { userId: "123", nickName: "사용자명" } }
+      return Number(payload?.sub?.userId || payload?.userId || payload?.id);
     } catch {
       return null;
     }
@@ -116,4 +116,4 @@ export class GroupGateway {
       });
     }
   }
-} 
+}
