@@ -7,7 +7,6 @@ import { Canvas } from '../canvas/entity/canvas.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { Group } from '../group/entity/group.entity';
-import { UserService } from '../user/user.service';
 
 config();
 
@@ -134,7 +133,7 @@ void (async () => {
               pixel.y = y;
               pixel.createdAt = created_at;
               pixel.updatedAt = updated_at;
-              pixel.color = '#FFFFFF';
+              pixel.color = '#000000';
               pixels.push(pixel);
             }
           }

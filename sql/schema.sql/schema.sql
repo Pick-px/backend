@@ -37,7 +37,7 @@ create table if not exists pixels
     canvas_id  integer                                        not null,
     x          integer                                        not null,
     y          integer                                        not null,
-    color      varchar(7) default '#FFFFFF'::character varying not null,
+    color      varchar(7) default '#000000'::character varying not null,
     created_at timestamp                                      not null,
     updated_at timestamp                                      not null,
     primary key (id),
@@ -55,10 +55,12 @@ ON pixels (canvas_id, x, y);
 
 create table if not exists user_canvas
 (
+    id bigserial,
     user_id   bigint                              not null,
     canvas_id integer                             not null,
     joined_at timestamp default CURRENT_TIMESTAMP not null,
-    primary key (user_id, canvas_id),
+    primary key (id),
+    unique(user_id, canvas_id),
     foreign key (user_id) references users
         on delete cascade,
     foreign key (canvas_id) references canvases

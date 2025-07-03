@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entity/user.entity';
 import { Repository } from 'typeorm';
@@ -206,5 +206,31 @@ export class UserService {
     if (!result) throw new Error('유저 정보가 없습니다.');
 
     return result;
+  }
+
+  async getUserInfo(_id: number) {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: _id },
+        relations: ['userCanvases', 'userCanvases.canvas'],
+      });
+      if (!user) {
+        throw new NotFoundException('유저를 찾을 수 없습니다.');
+      }
+      const canvases = (user.userCanvases || []).map((uc) => ({
+        canvasId: uc.canvas.id,
+        title: uc.canvas.title,
+        created_at: uc.canvas.createdAt,
+        size_x: uc.canvas.sizeX,
+        size_y: uc.canvas.sizeY,
+      }));
+      return {
+        email: user.email,
+        nickName: user.userName,
+        canvases,
+      };
+    } catch (err) {
+      throw new NotFoundException('유저 정보 조회 실패');
+    }
   }
 }

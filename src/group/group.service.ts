@@ -1,6 +1,11 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository, DataSource } from 'typeorm';
+import {
+  QueryFailedError,
+  Repository,
+  DataSource,
+  TreeRepositoryUtils,
+} from 'typeorm';
 import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
@@ -129,14 +134,6 @@ export class GroupService {
       where: { id: _id },
     });
     if (!user) throw new ConflictException('유저가 존재하지 않습니다.');
-
-    console.log(group.madeBy, user.id);
-    console.log(
-      'group.id type: ',
-      typeof group.madeBy,
-      'user.id type: ',
-      typeof user.id
-    );
     // 그룹 삭제
     if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);

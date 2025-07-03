@@ -1,19 +1,26 @@
 import {
   Controller,
   Post,
+  Get,
   InternalServerErrorException,
   Res,
+  Req,
   Body,
+  UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiOperation,
   ApiTags,
   ApiOkResponse,
   ApiBadRequestResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { Response } from 'express';
 import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
+import { JwtAuthGuard } from 'src/auth/jwt.guard';
+import { AuthRequest } from 'src/interface/AuthRequest.interface';
 
 @ApiTags('api/user')
 @Controller('api/user')
@@ -51,13 +58,27 @@ export class UserController {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
         signed: true,
       });
       res.status(200);
     } catch (err) {
       //   const message: string = err.message;
       res.send(404);
+    }
+  }
+
+  @Get('info')
+  @ApiOperation({ summary: '마이페이지 API' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getUserInfo(@Req() req: AuthRequest) {
+    const userId = req.user._id;
+
+    try {
+      return await this.userService.getUserInfo(userId);
+    } catch (err) {
+      throw new ForbiddenException('마이페이지 데이터 불러오기 실패');
     }
   }
 }
