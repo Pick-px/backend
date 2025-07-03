@@ -32,7 +32,7 @@ export class AuthService {
       sub: { userId: user_id, nickName: userName },
       jti: randomUUID(),
     };
-    return this.jwtService.sign(payload, { expiresIn: '30s' });
+    return this.jwtService.sign(payload, { expiresIn: '15m' });
   }
 
   async generateRefreshJWT(user_id: string): Promise<string> {
