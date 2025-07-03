@@ -78,6 +78,7 @@ create table if not exists groups
     current_participants_count int not null default 1,
     canvas_id bigint not null,
     made_by bigint not null,
+    is_default boolean not null default false,
     primary key (id),
     unique (name),
     constraint fk_canvas

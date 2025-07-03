@@ -5,6 +5,9 @@ import { redisConnection } from './bullmq.config';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import { Canvas } from '../canvas/entity/canvas.entity';
 import Redis from 'ioredis';
+import { Chat } from '../group/entity/chat.entity';
+import { Group } from '../group/entity/group.entity';
+import { UserService } from '../user/user.service';
 
 config();
 
@@ -54,7 +57,7 @@ async function flushDirtyPixels() {
   }
 }
 
-// 30초초마다 실행
+// 30초마다 실행
 const flushInterval = setInterval(() => {
   flushDirtyPixels().catch(console.error);
 }, 30000);
@@ -94,13 +97,8 @@ void (async () => {
   try {
     console.log('[Worker] 워커 프로세스 시작...');
     
-    // Redis 연결 - 개선된 설정 사용
-    redis = new Redis({
-      ...redisConnection,
-      commandTimeout: 30000, // 30초로 늘림
-      connectTimeout: 30000, // 30초로 늘림
-      maxRetriesPerRequest: 3,
-    });
+    // Redis 연결 - 개선된 설정
+    redis = new Redis(redisConnection);
     
     // Redis 연결 테스트
     await redis.ping();
@@ -189,5 +187,39 @@ void (async () => {
     process.exit(1);
   }
 })();
+
+// Redis에 저장된 채팅 메시지를 주기적으로 DB로 flush
+export async function flushChatQueue(dataSource) {
+  const groupRepo = dataSource.getRepository(Group);
+  const chatRepo = dataSource.getRepository(Chat);
+  const groups = await groupRepo.find({ select: ['id'] });
+  for (const group of groups) {
+    const key = `chat:${group.id}`;
+    while (true) {
+      const msg = await redis.rpop(key);
+      if (!msg) break;
+      try {
+        const chat = JSON.parse(msg);
+        await chatRepo.save({
+          groupId: group.id,
+          userId: chat.user.id,
+          message: chat.message,
+          createdAt: chat.created_at,
+          updatedAt: chat.created_at,
+        });
+      } catch (e) {
+        console.error('채팅 flush 중 오류:', e);
+      }
+    }
+  }
+}
+
+// flushChatQueue를 주기적으로 실행
+if (require.main === module) {
+  import('../data-source').then(async ({ AppDataSource }) => {
+    await AppDataSource.initialize();
+    setInterval(() => flushChatQueue(AppDataSource), 30000); // 30초
+  });
+}
 
 export { worker };

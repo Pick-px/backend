@@ -162,13 +162,14 @@ export class CanvasService {
       });
       //그룹 자동 생성
       const group = this.groupRepository.create({
-        name: `canvas_${newCanvas.id}_global`,
+        name: '전체',
         createdAt: new Date(),
         updatedAt: new Date(),
-        maxParticipants: 100,
+        maxParticipants: 100, // 전체 채팅... 나중에 숫자 늘려야 할수도
         currentParticipantsCount: 1,
         canvasId: newCanvas.id,
-        madeBy: 1, // TODO: 실제 서비스에서는 로그인 유저 id로 대체
+        madeBy: 1, // admin용 숫자?
+        is_default: true,
       });
       await this.groupRepository.save(group);
       // =====================

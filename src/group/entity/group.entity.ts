@@ -28,6 +28,9 @@ export class Group {
   @Column({ name: 'made_by', type: 'bigint' })
   madeBy: number;
 
+  @Column({ name: 'is_default', type: 'boolean', default: false })
+  is_default: boolean;
+
   @ManyToOne(() => Canvas, (canvas) => canvas.groups, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;

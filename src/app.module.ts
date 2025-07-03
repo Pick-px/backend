@@ -16,6 +16,11 @@ import { Canvas } from './canvas/entity/canvas.entity';
 import { GroupController } from './group/group.controller';
 import { GroupService } from './group/group.service';
 import { GroupModule } from './group/group.module';
+import { PassportModule } from '@nestjs/passport';
+import { JwtStrategy } from './auth/jwt.strategy';
+import { JwtModule } from '@nestjs/jwt';
+import { HttpModule } from '@nestjs/axios';
+import { forwardRef } from '@nestjs/common';
 
 @Module({
   imports: [
@@ -39,8 +44,13 @@ import { GroupModule } from './group/group.module';
     UserModule,
     AuthModule,
     GroupModule,
+    PassportModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+    }),
+    HttpModule,
   ],
   controllers: [AppController, UserController, GroupController],
-  providers: [AppService, GroupService],
+  providers: [AppService, GroupService, JwtStrategy],
 })
 export class AppModule {}
