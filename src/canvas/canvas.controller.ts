@@ -12,7 +12,6 @@ import {
 import { Response } from 'express';
 import * as zlib from 'zlib';
 
-
 @ApiTags('api/canvas')
 @Controller('api/canvas')
 export class CanvasController {
