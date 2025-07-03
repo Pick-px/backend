@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Req,
-  Res,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Controller, ForbiddenException, Post, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -46,7 +40,7 @@ export class AuthController {
       res.status(200).json({ message: 'token refresh success' });
     } catch (err) {
       console.log(err.message);
-      throw new UnauthorizedException('token refresh failed');
+      throw new ForbiddenException('token refresh failed');
     }
   }
 }
