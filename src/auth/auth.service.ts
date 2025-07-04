@@ -11,11 +11,7 @@ import { randomUUID } from 'crypto';
 import { InvalidCodeFieldError } from 'google-auth-library/build/src/auth/executable-response';
 import { User } from '../user/entity/user.entity';
 import Redis from 'ioredis';
-
-interface JwtPayload {
-  sub: { userId: string; nickName?: string };
-  jti: string;
-}
+import { JwtPayload } from '../interface/JwtPaylod.interface';
 
 @Injectable()
 export class AuthService {
@@ -32,7 +28,7 @@ export class AuthService {
       sub: { userId: user_id, nickName: userName },
       jti: randomUUID(),
     };
-    return this.jwtService.sign(payload, { expiresIn: '15m' });
+    return this.jwtService.sign(payload, { expiresIn: '15s' });
   }
 
   async generateRefreshJWT(user_id: string): Promise<string> {

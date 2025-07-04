@@ -10,6 +10,7 @@ import { AxiosError } from 'axios';
 import { AuthService } from 'src/auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import Redis from 'ioredis';
+import { JwtPayload } from '../interface/JwtPaylod.interface';
 
 interface CommonTokenResponse {
   access_token: string;
@@ -231,6 +232,16 @@ export class UserService {
       };
     } catch (err) {
       throw new NotFoundException('유저 정보 조회 실패');
+    }
+  }
+
+  async logout(token: string) {
+    try {
+      const payload: JwtPayload = this.jwtService.decode<JwtPayload>(token);
+      const jti = payload.jti;
+      await this.redis.del(jti);
+    } catch (err) {
+      throw new NotFoundException('로그아웃 실패: 레디스에서 토큰 삭제 실패');
     }
   }
 }

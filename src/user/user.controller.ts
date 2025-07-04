@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
   ForbiddenException,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -17,10 +18,11 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserService } from './user.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.guard';
 import { AuthRequest } from 'src/interface/AuthRequest.interface';
+import { SignedCookies } from 'src/interface/SignedCookies.interface';
 
 @ApiTags('api/user')
 @Controller('api/user')
@@ -79,6 +81,28 @@ export class UserController {
       return await this.userService.getUserInfo(userId);
     } catch (err) {
       throw new ForbiddenException('마이페이지 데이터 불러오기 실패');
+    }
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: '로그아웃 API' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    try {
+      const cookies: SignedCookies = req.signedCookies as SignedCookies;
+      const refreshToken = cookies.refresh_token;
+      await this.userService.logout(refreshToken);
+      res.clearCookie('refresh_token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        signed: true,
+        path: '/',
+      });
+    } catch (err) {
+      throw new ForbiddenException('로그아웃 실패입니다.');
     }
   }
 }
