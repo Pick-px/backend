@@ -3,6 +3,7 @@ import {
   Inject,
   UnauthorizedException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -28,7 +29,7 @@ export class AuthService {
       sub: { userId: user_id, nickName: userName },
       jti: randomUUID(),
     };
-    return this.jwtService.sign(payload, { expiresIn: '15s' });
+    return this.jwtService.sign(payload, { expiresIn: '15m' });
   }
 
   async generateRefreshJWT(user_id: string): Promise<string> {
@@ -57,14 +58,14 @@ export class AuthService {
 
       const storedToken = await this.redisClient.get(jti);
       if (storedToken !== token) {
-        throw new UnauthorizedException('유효하지 않은 토큰입니다.');
+        throw new ForbiddenException('유효하지 않은 토큰입니다.');
       }
 
       if (!payload.sub) throw new InvalidCodeFieldError('userId가 없습니다.');
 
       return payload.sub.userId;
     } catch (err) {
-      throw new UnauthorizedException('토큰 검증 실패');
+      throw new NotFoundException('토큰 검증 실패');
     }
   }
 
@@ -83,7 +84,7 @@ export class AuthService {
       await this.setRefreshTokenInRedis(payload.jti, token.refresh_token);
       return token;
     } catch (err) {
-      throw new UnauthorizedException('토큰 재발급에 실패했습니다.');
+      throw new ForbiddenException('토큰 재발급에 실패했습니다.');
     }
   }
 
