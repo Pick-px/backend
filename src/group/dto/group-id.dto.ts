@@ -6,4 +6,10 @@ export class GroupIdDto {
     description: '그룹 ID',
   })
   group_id: string;
-} 
+
+  @ApiProperty({
+    example: '1',
+    description: 'canvas ID',
+  })
+  canvas_id: string;
+}

@@ -7,13 +7,15 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { CanvasService } from './canvas.service';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://ws.pick-px.com',
+      'https://pick-px.com',
+    ],
     credentials: true,
   },
 })
@@ -23,12 +25,14 @@ export class CanvasGateway {
 
   constructor(
     private readonly canvasService: CanvasService,
-    private readonly jwtService: JwtService,
+    private readonly jwtService: JwtService
   ) {}
 
   // JWT 토큰에서 userId 추출
   private getUserIdFromSocket(client: Socket): number | null {
-    const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+    const token =
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization?.split(' ')[1];
     if (!token) return null;
     const payload = this.jwtService.decode(token) as any;
     return Number(payload?.sub?.userId || payload?.userId || payload?.id);
@@ -57,9 +61,18 @@ export class CanvasGateway {
         client.emit('error', { message: '인증 필요' });
         return;
       }
-      const result = await this.canvasService.applyDrawPixelWithCooldown({ ...pixel, userId });
+      const result = await this.canvasService.applyDrawPixelWithCooldown({
+        ...pixel,
+        userId,
+      });
       if (!result.success) {
-        client.emit('error', { message: result.message, remaining: result.remaining });
+        console.log(
+          `[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`
+        );
+        client.emit('error', {
+          message: result.message,
+          remaining: result.remaining,
+        });
         return;
       }
       // canvas_id 방에만 브로드캐스트
@@ -68,8 +81,8 @@ export class CanvasGateway {
         y: pixel.y,
         color: pixel.color,
         user: {
-          username: 'user1'
-        }
+          username: 'user1',
+        },
       });
     } catch (error) {
       console.error('픽셀 그리기 실패:', error);
@@ -86,7 +99,10 @@ export class CanvasGateway {
     // 쿨다운 정보 자동 푸시
     const userId = this.getUserIdFromSocket(client);
     if (userId && data.canvas_id) {
-      const remaining = await this.canvasService.getCooldownRemaining(userId, data.canvas_id);
+      const remaining = await this.canvasService.getCooldownRemaining(
+        userId,
+        data.canvas_id
+      );
       client.emit('cooldown-info', { cooldown: remaining > 0, remaining });
     }
   }

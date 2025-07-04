@@ -142,7 +142,7 @@ export class GroupController {
         defaultGroupId
       );
       if (!isMember) {
-        await this.groupService.joinGroup(defaultGroupId, user.id);
+        await this.groupService.joinGroup(defaultGroupId, user.id, canvasIdNum);
       }
       // 해당 그룹의 최신 메시지 50개
       const messages = await this.groupService.getRecentChatsByGroupId(
@@ -298,12 +298,17 @@ export class GroupController {
     console.log(_id);
     const { name, maxParticipants, canvasId } = data;
     try {
+      console.log('canvas Id : ', canvasId);
       await this.groupService.createGroup(name, maxParticipants, canvasId, _id);
       const response = new BaseResponseDto();
       response.isSuccess = true;
       response.message = '그룹 생성에 성공하였습니다.';
       return response;
     } catch (err) {
+      console.log(err.message);
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(
         {
           isSuccess: false,
@@ -335,6 +340,9 @@ export class GroupController {
       response.data = await this.groupService.getGroupList(canvas_id, _id);
       return response;
     } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(
         {
           isSuccess: false,
@@ -357,14 +365,22 @@ export class GroupController {
   @ApiBearerAuth()
   async joinGroup(@Req() req: AuthRequest, @Body() data: GroupIdDto) {
     const _id = req.user._id;
-    const { group_id } = data;
+    const { group_id, canvas_id } = data;
     try {
-      await this.groupService.joinGroup(Number(group_id), _id);
+      await this.groupService.joinGroup(
+        Number(group_id),
+        _id,
+        Number(canvas_id)
+      );
       const response = new BaseResponseDto();
       response.isSuccess = true;
       response.message = '그룹 참여에 성공하였습니다.';
       return response;
     } catch (err) {
+      console.log(err.message);
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(
         {
           isSuccess: false,
@@ -395,6 +411,9 @@ export class GroupController {
       response.message = '그룹 탈퇴에 성공하였습니다.';
       return response;
     } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(
         {
           isSuccess: false,
@@ -433,6 +452,9 @@ export class GroupController {
       console.log(response.data);
       return response;
     } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
       throw new HttpException(
         {
           isSuccess: false,

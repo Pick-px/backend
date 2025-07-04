@@ -77,15 +77,20 @@ export class CanvasService {
   async getPixelsFromDB(
     canvas_id: string
   ): Promise<{ x: number; y: number; color: string }[]> {
+    console.time('fromDB');
     const dbPixels = await this.pixelRepository.find({
       where: { canvasId: Number(canvas_id) },
       select: ['x', 'y', 'color'],
     });
-    return dbPixels.map((pixel) => ({
+    console.timeEnd('fromDB');
+    console.time('map');
+    const result = dbPixels.map((pixel) => ({
       x: pixel.x,
       y: pixel.y,
       color: pixel.color,
     }));
+    console.timeEnd('map');
+    return result;
   }
 
   // 통합: Redis 우선, 없으면 DB + Redis 캐싱
@@ -96,7 +101,7 @@ export class CanvasService {
 
     if (!realCanvasId) {
       const defaultCanvas = await this.canvasRepository.find({
-        order: { id: 'ASC' },
+        order: { id: 'DESC' },
         take: 1,
       });
       const canvas = defaultCanvas[0];
@@ -214,7 +219,7 @@ export class CanvasService {
     if (!realCanvasId) {
       // 기본 캔버스 조회
       const canvases = await this.canvasRepository.find({
-        order: { id: 'ASC' },
+        order: { id: 'DESC' },
         take: 1,
       });
       const defaultCanvas = canvases[0];
@@ -232,33 +237,49 @@ export class CanvasService {
   }
 
   // 쿨다운 적용 픽셀 그리기
-  async applyDrawPixelWithCooldown({ canvas_id, x, y, color, userId }: { canvas_id: string; x: number; y: number; color: string; userId: number }): Promise<any> {
+  async applyDrawPixelWithCooldown({
+    canvas_id,
+    x,
+    y,
+    color,
+    userId,
+  }: {
+    canvas_id: string;
+    x: number;
+    y: number;
+    color: string;
+    userId: number;
+  }): Promise<any> {
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 30;
-    // 남은 쿨다운 확인
-    const expireAt = await this.redisClient.get(cooldownKey);
-    const now = Date.now();
-    if (expireAt && Number(expireAt) > now) {
-      return { success: false, message: '쿨다운 중', remaining: Math.ceil((Number(expireAt) - now) / 1000) };
+    const cooldownSeconds = 20;
+
+    // 남은 쿨다운 확인 (Redis TTL 사용)
+    const ttl = await this.redisClient.ttl(cooldownKey);
+
+    if (ttl > 0) {
+      return { success: false, message: '쿨다운 중', remaining: ttl };
     }
+
     // 픽셀 그리기 적용
     const result = await this.applyDrawPixel({ canvas_id, x, y, color });
     if (result) {
-      const newExpire = now + cooldownSeconds * 1000;
-      await this.redisClient.set(cooldownKey, newExpire.toString(), 'PX', cooldownSeconds * 1000);
+      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };
     } else {
       return { success: false, message: '픽셀 저장 실패' };
     }
   }
 
-  // 남은 쿨다운(ms) 반환
-  async getCooldownRemaining(userId: number, canvasId: string): Promise<number> {
+  // 남은 쿨다운(초) 반환
+  async getCooldownRemaining(
+    userId: number,
+    canvasId: string
+  ): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
-    const expireAt = await this.redisClient.get(cooldownKey);
-    if (!expireAt) return 0;
-    const now = Date.now();
-    const remaining = Number(expireAt) - now;
-    return remaining > 0 ? remaining : 0;
+    const ttl = await this.redisClient.ttl(cooldownKey);
+    console.log(
+      `[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`
+    );
+    return ttl > 0 ? ttl : 0; // 초
   }
 }

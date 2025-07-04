@@ -1,11 +1,11 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
-  QueryFailedError,
-  Repository,
-  DataSource,
-  TreeRepositoryUtils,
-} from 'typeorm';
+  ConflictException,
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { QueryFailedError, Repository, DataSource, Not } from 'typeorm';
 import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
@@ -53,6 +53,20 @@ export class GroupService {
           where: { id: _id },
         });
 
+        const count = await this.dataSource
+          .getRepository(GroupUser)
+          .createQueryBuilder('group_user')
+          .innerJoin('group_user.group', 'group')
+          .where('group_user.user.id = :userId', { userId: _id })
+          .andWhere('group_user.canvas_id = :canvasId', { canvasId: canvas_id })
+          .andWhere('group.is_default = false')
+          .getCount();
+
+        if (count >= 3)
+          throw new ForbiddenException(
+            '캔버스 당 최대 3개의 그룹에만 가입 가능합니다.'
+          );
+
         if (!made_by_user) {
           throw new ConflictException('유저가 존재하지 않습니다.');
         }
@@ -72,6 +86,7 @@ export class GroupService {
           group: savedGroup,
           user: made_by_user,
           join: new Date(),
+          canvas_id: canvas_id,
         });
 
         await manager.save(groupUser);
@@ -90,13 +105,25 @@ export class GroupService {
     }
   }
 
-  async joinGroup(groupId: number, _id: number) {
+  async joinGroup(groupId: number, _id: number, canvasId: number) {
     await this.dataSource.transaction(async (manager) => {
       const user = await manager.findOne(User, { where: { id: _id } });
       const group = await manager.findOne(Group, { where: { id: groupId } });
+      const count = await this.dataSource
+        .getRepository(GroupUser)
+        .createQueryBuilder('group_user')
+        .innerJoin('group_user.group', 'group')
+        .where('group_user.user.id = :userId', { userId: _id })
+        .andWhere('group_user.canvas_id = :canvasId', { canvasId: canvasId })
+        .andWhere('group.is_default = false')
+        .getCount();
+      if (count >= 3)
+        throw new ForbiddenException(
+          '캔버스 당 최대 3개의 그룹에만 가입 가능합니다.'
+        );
 
       if (!user || !group) {
-        throw new ConflictException('유저 또는 그룹이 존재하지 않습니다.');
+        throw new NotFoundException('유저 또는 그룹이 존재하지 않습니다.');
       }
 
       const existingGroupUser = await manager.findOne(GroupUser, {
@@ -114,6 +141,7 @@ export class GroupService {
         group: group,
         user: user,
         join: new Date(),
+        canvas_id: group.canvasId,
       });
 
       group.currentParticipantsCount += 1;
@@ -127,13 +155,13 @@ export class GroupService {
       where: { id: Number(group_id) },
     });
     if (!group) {
-      throw new ConflictException('그룹이 존재하지 않습니다.');
+      throw new NotFoundException('그룹이 존재하지 않습니다.');
     }
 
     const user = await this.userRepository.findOne({
       where: { id: _id },
     });
-    if (!user) throw new ConflictException('유저가 존재하지 않습니다.');
+    if (!user) throw new NotFoundException('유저가 존재하지 않습니다.');
     // 그룹 삭제
     if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);
@@ -146,29 +174,51 @@ export class GroupService {
         throw new ConflictException('그룹에 가입되어 있지 않습니다.');
       }
       group.currentParticipantsCount -= 1;
-      await this.dataSource.manager.save(group);
       await this.dataSource.manager.remove(groupUser);
     }
   }
 
   async getGroupList(canvas_id: string, _id: number) {
-    const allGroupOnCanvas = await this.groupRepository.find({
-      where: { canvasId: Number(canvas_id) },
-    });
+    const groups = await this.groupRepository
+      .createQueryBuilder('group')
+      .leftJoin(
+        GroupUser,
+        'group_user',
+        'group_user.group.id = group.id AND group_user.user.id = :userId',
+        { userId: _id }
+      )
+      .where('group.canvasId = :canvasId', { canvasId: Number(canvas_id) })
+      .andWhere('group.is_default = false')
+      .select([
+        'group.id',
+        'group.name',
+        'group.createdAt',
+        'group.updatedAt',
+        'group.maxParticipants',
+        'group.currentParticipantsCount',
+        'group.canvasId',
+        'group.madeBy',
+      ])
+      .addSelect(
+        'CASE WHEN group_user.user.id IS NOT NULL THEN true ELSE false END',
+        'isJoined'
+      )
+      .getRawAndEntities();
+    console.log(groups);
 
-    const userGroups = await this.dataSource
-      .getRepository(GroupUser)
-      .createQueryBuilder('group_user')
-      .leftJoinAndSelect('group_user.group', 'group')
-      .where('group_user.user.id = :userId', { userId: _id })
-      .andWhere('group.canvasId = :canvasId', { canvasId: canvas_id })
-      .getMany();
-
-    const userGroupList = userGroups.map((groupUser) => groupUser.group);
+    const rawResults = groups.raw;
+    const allGroup = groups.entities;
+    console.log(rawResults);
+    const userGroup = rawResults
+      .map((row, idx) => {
+        const isJoined = row.isJoined ?? false;
+        return isJoined ? allGroup[idx] : null;
+      })
+      .filter((g) => g !== null);
 
     return {
-      allGroup: allGroupOnCanvas,
-      userGroup: userGroupList,
+      allGroup,
+      userGroup,
     };
   }
 
