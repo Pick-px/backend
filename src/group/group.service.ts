@@ -243,13 +243,16 @@ export class GroupService {
   }
 
   // 특정 캔버스에서 유저가 참여 중인 그룹만 반환
-  async findUserGroupsByCanvasId(userId: number, canvasId: number): Promise<Group[]> {
+  async findUserGroupsByCanvasId(
+    userId: number,
+    canvasId: number
+  ): Promise<Group[]> {
     const userGroups = await this.dataSource
       .getRepository(GroupUser)
       .createQueryBuilder('group_user')
       .leftJoinAndSelect('group_user.group', 'group')
       .where('group_user.user.id = :userId', { userId })
-      .andWhere('group.canvasId = :canvasId', { canvasId })
+      .andWhere('group_user.canvasId = :canvasId', { canvasId })
       .getMany();
 
     return userGroups.map((groupUser) => groupUser.group);

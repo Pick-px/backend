@@ -124,7 +124,10 @@ export class GroupController {
       }
       console.log(user);
       // 해당 캔버스에서 유저가 참여중인 그룹 리스트만 조회
-      const groups = await this.groupService.findUserGroupsByCanvasId(user.id, Number(canvasId));
+      const groups = await this.groupService.findUserGroupsByCanvasId(
+        user.id,
+        Number(canvasId)
+      );
       // 해당 캔버스의 전체 채팅방만 조회
       const defaultGroup = await this.groupService.findDefaultGroupByCanvasId(
         Number(canvasId)
