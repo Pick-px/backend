@@ -250,8 +250,9 @@ export class GroupService {
     const userGroups = await this.dataSource
       .getRepository(GroupUser)
       .createQueryBuilder('group_user')
+      .leftJoinAndSelect('group_user.group', 'group')
       .where('group_user.user.id = :userId', { userId })
-      .andWhere('group_user.canvasId = :canvasId', { canvasId })
+      .andWhere('group_user.canvas_id = :canvasId', { canvasId })
       .getMany();
 
     return userGroups.map((groupUser) => groupUser.group);
