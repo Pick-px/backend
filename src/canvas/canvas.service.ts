@@ -234,31 +234,31 @@ export class CanvasService {
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({ canvas_id, x, y, color, userId }: { canvas_id: string; x: number; y: number; color: string; userId: number }): Promise<any> {
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 30;
-    // 남은 쿨다운 확인
-    const expireAt = await this.redisClient.get(cooldownKey);
-    const now = Date.now();
-    if (expireAt && Number(expireAt) > now) {
-      return { success: false, message: '쿨다운 중', remaining: Math.ceil((Number(expireAt) - now) / 1000) };
+    const cooldownSeconds = 20;
+    
+    // 남은 쿨다운 확인 (Redis TTL 사용)
+    const ttl = await this.redisClient.ttl(cooldownKey);
+    
+    if (ttl > 0) {
+      return { success: false, message: '쿨다운 중', remaining: ttl };
     }
+    
     // 픽셀 그리기 적용
     const result = await this.applyDrawPixel({ canvas_id, x, y, color });
     if (result) {
-      const newExpire = now + cooldownSeconds * 1000;
-      await this.redisClient.set(cooldownKey, newExpire.toString(), 'PX', cooldownSeconds * 1000);
+      // 쿨다운 설정 (30초)
+      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };
     } else {
       return { success: false, message: '픽셀 저장 실패' };
     }
   }
 
-  // 남은 쿨다운(ms) 반환
+  // 남은 쿨다운(초) 반환
   async getCooldownRemaining(userId: number, canvasId: string): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
-    const expireAt = await this.redisClient.get(cooldownKey);
-    if (!expireAt) return 0;
-    const now = Date.now();
-    const remaining = Number(expireAt) - now;
-    return remaining > 0 ? remaining : 0;
+    const ttl = await this.redisClient.ttl(cooldownKey);
+    console.log(`[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`);
+    return ttl > 0 ? ttl : 0; // 초
   }
 }
