@@ -242,13 +242,17 @@ export class GroupService {
       .getMany();
   }
 
-  // 특정 유저가 참여 중인 모든 그룹을 반환
-  async findGroupsByUserId(userId: number): Promise<Group[]> {
-    const groupUsers = await this.dataSource.getRepository(GroupUser).find({
-      where: { user: { id: userId } },
-      relations: ['group'],
-    });
-    return groupUsers.map((gu) => gu.group);
+  // 특정 캔버스에서 유저가 참여 중인 그룹만 반환
+  async findUserGroupsByCanvasId(userId: number, canvasId: number): Promise<Group[]> {
+    const userGroups = await this.dataSource
+      .getRepository(GroupUser)
+      .createQueryBuilder('group_user')
+      .leftJoinAndSelect('group_user.group', 'group')
+      .where('group_user.user.id = :userId', { userId })
+      .andWhere('group.canvasId = :canvasId', { canvasId })
+      .getMany();
+
+    return userGroups.map((groupUser) => groupUser.group);
   }
 
   // 캔버스 ID로 해당 캔버스의 모든 그룹을 반환
