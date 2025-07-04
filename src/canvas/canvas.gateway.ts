@@ -59,6 +59,7 @@ export class CanvasGateway {
       }
       const result = await this.canvasService.applyDrawPixelWithCooldown({ ...pixel, userId });
       if (!result.success) {
+        console.log(`[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`);
         client.emit('error', { message: result.message, remaining: result.remaining });
         return;
       }
