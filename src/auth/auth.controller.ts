@@ -2,10 +2,7 @@ import { Controller, ForbiddenException, Post, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-
-interface SignedCookies {
-  refresh_token: string;
-}
+import { SignedCookies } from '../interface/SignedCookies.interface';
 
 @ApiTags('auth')
 @Controller('api/auth')
@@ -19,9 +16,16 @@ export class AuthController {
   ) {
     try {
       console.log('토큰 재발급 요청 도착');
-      const cookies = req.signedCookies as SignedCookies;
+      const cookies: SignedCookies = req.signedCookies as SignedCookies;
       const refreshToken = cookies.refresh_token;
       const userId = await this.authService.checkValidationToken(refreshToken);
+      res.clearCookie('refresh_token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        signed: true,
+        path: '/',
+      });
       const { access_token, refresh_token } =
         await this.authService.regeneratedJWT(userId);
 
