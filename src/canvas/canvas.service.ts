@@ -19,8 +19,8 @@ export class CanvasService {
     private readonly pixelRepository: Repository<Pixel>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis
+    @Inject('REDIS_PIXEL_CLIENT')
+    private readonly pixelRedis: Redis
   ) {}
 
   // 픽셀 저장 로직 (Redis만 사용)
@@ -38,11 +38,11 @@ export class CanvasService {
     try {
       const key = `${canvas_id}:${x}:${y}`;
 
-      // Redis에 저장
-      await this.redisClient.set(key, color);
+      // Redis에 저장 (3일 TTL)
+      await this.pixelRedis.setex(key, 3 * 24 * 60 * 60, color);
 
       // dirty_pixels set에 추가 (워커가 DB로 flush하기 위해)
-      await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
+      await this.pixelRedis.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
 
       console.log(`Redis: 픽셀 저장 성공: ${key} = ${color}`);
       return true;
@@ -56,11 +56,11 @@ export class CanvasService {
   async getPixelsFromRedis(
     canvas_id: string
   ): Promise<{ x: number; y: number; color: string }[]> {
-    const keys = await this.redisClient.keys(`${canvas_id}:*`);
+    const keys = await this.pixelRedis.keys(`${canvas_id}:*`);
     if (keys.length === 0) return [];
     const pixels: { x: number; y: number; color: string }[] = [];
     for (const key of keys) {
-      const color = await this.redisClient.get(key);
+      const color = await this.pixelRedis.get(key);
       if (color) {
         const [, x, y] = key.split(':');
         pixels.push({
@@ -118,7 +118,7 @@ export class CanvasService {
     // 3. Redis에 캐싱
     for (const pixel of dbPixels) {
       const key = `${realCanvasId}:${pixel.x}:${pixel.y}`;
-      await this.redisClient.set(key, pixel.color);
+      await this.pixelRedis.set(key, pixel.color);
     }
     return dbPixels;
   }
@@ -131,7 +131,7 @@ export class CanvasService {
   ): Promise<string | null> {
     try {
       const key = `${canvas_id}:${x}:${y}`;
-      const color = await this.redisClient.get(key);
+      const color = await this.pixelRedis.get(key);
 
       if (color) {
         console.log(`Redis: 픽셀 조회 성공: ${key} = ${color}`);
@@ -255,7 +255,7 @@ export class CanvasService {
     const cooldownSeconds = 20;
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
-    const ttl = await this.redisClient.ttl(cooldownKey);
+    const ttl = await this.pixelRedis.ttl(cooldownKey);
 
     if (ttl > 0) {
       return { success: false, message: '쿨다운 중', remaining: ttl };
@@ -264,7 +264,7 @@ export class CanvasService {
     // 픽셀 그리기 적용
     const result = await this.applyDrawPixel({ canvas_id, x, y, color });
     if (result) {
-      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
+      await this.pixelRedis.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };
     } else {
       return { success: false, message: '픽셀 저장 실패' };
@@ -278,7 +278,7 @@ export class CanvasService {
     canvasId: string
   ): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
-    const ttl = await this.redisClient.ttl(cooldownKey);
+    const ttl = await this.pixelRedis.ttl(cooldownKey);
     console.log(
       `[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`
     );

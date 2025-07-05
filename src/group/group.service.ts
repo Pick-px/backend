@@ -3,6 +3,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository, DataSource, Not } from 'typeorm';
@@ -10,6 +11,7 @@ import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
+import Redis from 'ioredis';
 
 @Injectable()
 export class GroupService {
@@ -18,7 +20,9 @@ export class GroupService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly dataSource: DataSource
+    private readonly dataSource: DataSource,
+    @Inject('REDIS_CHAT_CLIENT')
+    private readonly chatRedis: Redis
   ) {}
 
   async getGroupIdByCanvasId(canvasId: number): Promise<number | null> {
@@ -30,12 +34,72 @@ export class GroupService {
     groupId: number,
     take: number
   ): Promise<Chat[]> {
-    return this.groupRepository.manager.find(Chat, {
+    // Redis에서 최근 메시지만 조회 (최대 50개로 제한)
+    const redisChats = await this.chatRedis.lrange(`chat:${groupId}`, 0, Math.min(take, 50) - 1);
+    
+    // Redis에 있는 메시지들 파싱
+    const redisMessages = redisChats
+      .map(chatStr => JSON.parse(chatStr))
+      .filter(chat => chat.id && chat.user && chat.message) // 유효한 메시지만
+      .map(chat => ({
+        id: chat.id,
+        groupId,
+        userId: chat.user.id,
+        message: chat.message,
+        createdAt: new Date(chat.created_at),
+        updatedAt: new Date(chat.created_at),
+        user: {
+          id: chat.user.id,
+          userName: chat.user.user_name
+        }
+      })) as Chat[];
+    
+    // Redis 메시지가 충분하면 반환
+    if (redisMessages.length >= take) {
+      return redisMessages.slice(0, take);
+    }
+    
+    // Redis 메시지가 부족하면 DB에서 추가 조회
+    const dbTake = take - redisMessages.length;
+    const dbChats = await this.groupRepository.manager.find(Chat, {
       where: { groupId },
       order: { createdAt: 'DESC' },
-      take,
+      take: dbTake,
       relations: ['user'],
     });
+    
+    // DB 결과를 Redis에 캐싱
+    if (dbChats.length > 0) {
+      const chatKey = `chat:${groupId}`;
+      
+      // DB 메시지를 Redis 형식으로 변환
+      const dbChatPayloads = dbChats.map(chat => ({
+        id: chat.id,
+        user: { id: chat.user.id, user_name: chat.user.userName },
+        message: chat.message,
+        created_at: chat.createdAt.toISOString(),
+      }));
+      
+      // 기존 Redis 메시지와 합쳐서 저장
+      const allChats = [...redisMessages, ...dbChats];
+      const allPayloads = allChats.map(chat => ({
+        id: chat.id,
+        user: { id: chat.user.id, user_name: chat.user.userName },
+        message: chat.message,
+        created_at: chat.createdAt.toISOString(),
+      }));
+      
+      // Redis에 저장 (최대 50개, 12시간 TTL)
+      await this.chatRedis.del(chatKey);
+      if (allPayloads.length > 0) {
+        await this.chatRedis.lpush(chatKey, ...allPayloads.map(p => JSON.stringify(p)));
+        await this.chatRedis.ltrim(chatKey, 0, 49);
+        await this.chatRedis.expire(chatKey, 12 * 60 * 60);
+      }
+    }
+    
+    // Redis + DB 메시지 합치기 (최신순)
+    return [...redisMessages, ...dbChats];
   }
 
   async createGroup(
@@ -162,9 +226,18 @@ export class GroupService {
       where: { id: _id },
     });
     if (!user) throw new NotFoundException('유저가 존재하지 않습니다.');
+    
     // 그룹 삭제
     if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);
+      
+      // 그룹 삭제 시 Redis 채팅도 즉시 삭제
+      try {
+        await this.chatRedis.del(`chat:${group_id}`);
+        console.log(`[그룹 삭제] 그룹 ${group_id}의 Redis 채팅 삭제`);
+      } catch (error) {
+        console.error('[그룹 삭제] Redis 채팅 삭제 실패:', error);
+      }
     } else {
       // 그룹 탈퇴
       const groupUser = await this.dataSource.manager.findOne(GroupUser, {
@@ -282,5 +355,46 @@ export class GroupService {
       relations: ['user', 'group'],
     });
     return !!groupUser;
+  }
+
+  // Redis 채팅 정리
+  async cleanupInactiveGroupChats(): Promise<void> {
+    try {
+      // 모든 채팅 키 조회
+      const chatKeys = await this.chatRedis.keys('chat:*');
+      
+      if (chatKeys.length === 0) {
+        return; // 정리할 게 없으면 조기 종료
+      }
+      
+      console.log(`[정리] 총 ${chatKeys.length}개의 채팅 키 발견`);
+      
+      let cleanedCount = 0;
+      
+      for (const chatKey of chatKeys) {
+        const groupId = chatKey.replace('chat:', '');
+        
+        // 그룹이 실제로 존재하는지 확인
+        const group = await this.findGroupById(Number(groupId));
+        
+        if (!group) {
+          // 그룹이 삭제된 경우 Redis 채팅도 삭제 
+          await this.chatRedis.del(chatKey);
+          console.log(`[정리] 삭제된 그룹 ${groupId}의 채팅 삭제`);
+          cleanedCount++;
+        }
+      }
+      
+      console.log(`[정리] 완료: ${cleanedCount}개의 비활성 채팅 삭제`);
+    } catch (error) {
+      console.error('[정리] 비활성 그룹 채팅 정리 실패:', error);
+    }
+  }
+
+  // 주기적 정리 시작 (6시간마다 - 부하 감소)
+  startCleanupScheduler(): void {
+    setInterval(() => {
+      this.cleanupInactiveGroupChats().catch(console.error);
+    }, 6 * 60 * 60 * 1000); // 6시간마다
   }
 }
