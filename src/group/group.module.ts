@@ -11,6 +11,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
 import { PassportModule } from '@nestjs/passport';
 import { AuthModule } from '../auth/auth.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
@@ -22,9 +23,15 @@ import { AuthModule } from '../auth/auth.module';
     UserModule,
     PassportModule,
     forwardRef(() => AuthModule),
+    RedisModule,
   ],
   providers: [GroupService, GroupGateway],
   controllers: [GroupController],
   exports: [GroupService, TypeOrmModule],
 })
-export class GroupModule {}
+export class GroupModule {
+  constructor(private readonly groupService: GroupService) {
+    // 모듈 초기화 시 정리 스케줄러 시작
+    this.groupService.startCleanupScheduler();
+  }
+}
