@@ -23,6 +23,7 @@ create table if not exists canvases
     ended_at   timestamp   not null,
     size_x     integer     not null,
     size_y     integer     not null,
+    is_active boolean default false not null,
     primary key (id),
     constraint canvases_type_check
         check (type = ANY (ARRAY ['public'::text, 'event'::text]))
@@ -58,6 +59,7 @@ create table if not exists user_canvas
     id bigserial,
     user_id   bigint                              not null,
     canvas_id integer                             not null,
+    count integer default 0 not null,
     joined_at timestamp default CURRENT_TIMESTAMP not null,
     primary key (id),
     unique(user_id, canvas_id),
@@ -82,7 +84,7 @@ create table if not exists groups
     made_by bigint not null,
     is_default boolean not null default false,
     primary key (id),
-    unique (name),
+    unique (canvas_id,name),
     constraint fk_canvas
         foreign key (canvas_id) references canvases(id)
             on delete cascade,

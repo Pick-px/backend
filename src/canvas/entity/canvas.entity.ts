@@ -27,6 +27,9 @@ export class Canvas {
   @Column({ name: 'size_y' })
   sizeY: number;
 
+  @Column({ type: 'boolean', name: 'is_active' })
+  is_active: boolean;
+
   @OneToMany(() => UserCanvas, (uc) => uc.canvas)
   canvasUseres: UserCanvas[];
 
