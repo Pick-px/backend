@@ -10,7 +10,11 @@ interface SocketUser {
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com', 'https://pick-px.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://ws.pick-px.com',
+      'https://pick-px.com',
+    ],
     credentials: true,
   },
 })
@@ -53,8 +57,8 @@ export class CanvasGateway {
         y: pixel.y,
         color: pixel.color,
         user: {
-          username: 'user1'
-        }
+          username: 'user1',
+        },
       });
     } catch (error) {
       client.emit('pixel-error', { message: '픽셀 그리기 실패' });

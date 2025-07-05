@@ -23,6 +23,9 @@ export class GroupUser {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ name: 'canvas_id', type: 'int' })
+  canvas_id: number;
+
   @Column({ name: 'joined_at', type: 'timestamp' })
   joinedAt: Date;
 }

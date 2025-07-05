@@ -73,7 +73,7 @@ alter table user_canvas
 create table if not exists groups
 (
     id         bigserial,
-    name      varchar(50) not null,
+    name      varchar(20) not null,
     created_at timestamp    not null,
     updated_at timestamp    not null,
     max_participants int not null check (max_participants >= 1 and max_participants <= 100),
@@ -99,6 +99,7 @@ create table if not exists group_users
     id bigserial,
     group_id bigint not null,
     user_id  bigint not null,
+    canvas_id bigint not null,
     joined_at timestamp not null default now(),
     primary key (id),
     unique(group_id, user_id),

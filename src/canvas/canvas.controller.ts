@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Query, Get, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Query,
+  Get,
+  Res,
+  NotFoundException,
+} from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
 import {
@@ -77,7 +85,7 @@ export class CanvasController {
 
     // 실제 캔버스 정보 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
     const canvas = await this.canvasService.getCanvasById(canvas_id);
-    if (!canvas?.metaData) throw new Error('캔버스가 없습니다.');
+    if (!canvas?.metaData) throw new NotFoundException('캔버스가 없습니다.');
 
     const id = canvas.canvas_id;
     const meta = canvas.metaData;
@@ -87,7 +95,7 @@ export class CanvasController {
       data: {
         canvas_id: id,
         pixels,
-        compression: 'gzip',
+        // compression: 'gzip',
         totalPixels: pixels.length,
         canvasSize: {
           width: meta.sizeX ?? 0,
@@ -96,13 +104,13 @@ export class CanvasController {
       },
     };
 
-    const json = JSON.stringify(responseData);
-    const gzipped = zlib.gzipSync(json);
+    // const json = JSON.stringify(responseData);
+    // const gzipped = zlib.gzipSync(json);
     res.set({
       'Content-Type': 'application/json',
-      'Content-Encoding': 'gzip',
+      // 'Content-Encoding': 'gzip',
     });
-    res.send(gzipped);
+    res.send(responseData);
   }
 
   @Get('default')
@@ -110,7 +118,7 @@ export class CanvasController {
     const canvas = await this.canvasService.getCanvasById(); // 파라미터 없이 호출 시 디폴트 반환
     const defaultCanvas = canvas?.canvas_id;
     if (!defaultCanvas) {
-      throw new Error('아이디 없음');
+      throw new NotFoundException('아이디 없음');
     }
     return { id: defaultCanvas };
   }
@@ -128,8 +136,8 @@ export class CanvasController {
       }
       const canvasMetaData = canvas.metaData;
 
-      if (!canvasMetaData) throw new Error('캔버스 정보 없음');
-      if (!canvas.canvas_id) throw new Error('캔버스 Id ');
+      if (!canvasMetaData) throw new NotFoundException('캔버스 정보 없음');
+      if (!canvas.canvas_id) throw new NotFoundException('캔버스 Id ');
       return {
         success: true,
         data: {

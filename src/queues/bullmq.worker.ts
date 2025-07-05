@@ -31,17 +31,26 @@ async function flushDirtyPixels() {
       const dirtyKey = `dirty_pixels:${canvas.id}`;
       const dirtyPixels = await redis.smembers(dirtyKey);
       if (dirtyPixels.length === 0) continue;
-      console.log(`[Worker] Flushing ${dirtyPixels.length} dirty pixels for canvas ${canvas.id}`);
+      console.log(
+        `[Worker] Flushing ${dirtyPixels.length} dirty pixels for canvas ${canvas.id}`
+      );
       for (const xy of dirtyPixels) {
         const [x, y] = xy.split(':');
         const color = await redis.get(`${canvas.id}:${x}:${y}`);
         if (!color) continue;
-        const pixel = await pixelRepo.findOne({ where: { canvasId: canvas.id, x: Number(x), y: Number(y) } });
+        const pixel = await pixelRepo.findOne({
+          where: { canvasId: canvas.id, x: Number(x), y: Number(y) },
+        });
         if (pixel) {
           pixel.color = color;
           await pixelRepo.save(pixel);
         } else {
-          await pixelRepo.save({ canvasId: canvas.id, x: Number(x), y: Number(y), color });
+          await pixelRepo.save({
+            canvasId: canvas.id,
+            x: Number(x),
+            y: Number(y),
+            color,
+          });
         }
       }
       await redis.del(dirtyKey); // flush 후 dirty set 비우기
@@ -85,7 +94,7 @@ async function flushChatQueue() {
 
 // 픽셀/채팅 flush 순차 실행
 const FLUSH_PIXELS_MS = 10000; // 픽셀 flush 주기
-const FLUSH_CHAT_MS = 10000;   // 채팅 flush 주기
+const FLUSH_CHAT_MS = 1000; // 채팅 flush 주기
 
 const flushDirtyPixelsInterval = setInterval(async () => {
   await flushDirtyPixels();
@@ -122,8 +131,11 @@ void (async () => {
       async (job) => {
         try {
           const start = Date.now();
-          const { canvas_id, size_x, size_y, created_at, updated_at } = job.data;
-          console.log(`[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`);
+          const { canvas_id, size_x, size_y, created_at, updated_at } =
+            job.data;
+          console.log(
+            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
+          );
           const pixels: Pixel[] = [];
           for (let y = 0; y < size_y; y++) {
             for (let x = 0; x < size_x; x++) {
@@ -141,10 +153,17 @@ void (async () => {
           const chunkSize = 5000;
           for (let i = 0; i < pixels.length; i += chunkSize) {
             const chunk = pixels.slice(i, i + chunkSize);
-            await pixelRepo.createQueryBuilder().insert().into(Pixel).values(chunk).execute();
+            await pixelRepo
+              .createQueryBuilder()
+              .insert()
+              .into(Pixel)
+              .values(chunk)
+              .execute();
           }
           const duration = Date.now() - start;
-          console.log(`[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`);
+          console.log(
+            `[Worker] Pixel 작업 완료 (${pixels.length}개) - ${duration}ms`
+          );
         } catch (error) {
           console.error(`[Worker] Job 처리 중 에러:`, error);
           throw error;

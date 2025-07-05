@@ -11,7 +11,11 @@ import { Group } from './entity/group.entity';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com', 'https://pick-px.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://ws.pick-px.com',
+      'https://pick-px.com',
+    ],
     credentials: true,
   },
 })
@@ -63,13 +67,19 @@ export class GroupGateway {
     // 그룹 참여 여부 확인
     const isMember = await this.checkGroupMembership(userId, Number(data.group_id));
     if (!isMember) {
-      client.emit('chat-error', { message: '이 채팅방에 참여할 권한이 없습니다.' });
+      client.emit('chat-error', {
+        message: '이 채팅방에 참여할 권한이 없습니다.',
+      });
       return;
     }
     // 기존 group_id 룸에서 leave (canvas_id 룸은 유지)
     const currentRooms = Array.from(client.rooms);
     for (const room of currentRooms) {
-      if (room !== client.id && room !== data.group_id && !room.startsWith('canvas_')) {
+      if (
+        room !== client.id &&
+        room !== data.group_id &&
+        !room.startsWith('canvas_')
+      ) {
         client.leave(room);
       }
     }
@@ -100,7 +110,9 @@ export class GroupGateway {
       // 그룹 참여 여부 확인
       const isMember = await this.checkGroupMembership(userId, Number(body.group_id));
       if (!isMember) {
-        client.emit('chat-error', { message: '이 채팅방에 참여할 권한이 없습니다.' });
+        client.emit('chat-error', {
+          message: '이 채팅방에 참여할 권한이 없습니다.',
+        });
         return;
       }
       // Redis에 메시지 push (lpush chat:{group_id})
@@ -112,7 +124,10 @@ export class GroupGateway {
         message: body.message,
         created_at: now.toISOString(),
       };
-      await this.redisClient.lpush(`chat:${body.group_id}`, JSON.stringify(chatPayload));
+      await this.redisClient.lpush(
+        `chat:${body.group_id}`,
+        JSON.stringify(chatPayload)
+      );
       // 브로드캐스트
       this.server.to(body.group_id).emit('chat-message', chatPayload);
     } catch (error) {
