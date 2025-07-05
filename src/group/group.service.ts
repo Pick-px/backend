@@ -6,7 +6,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository, DataSource, Not } from 'typeorm';
+import { QueryFailedError, Repository, DataSource } from 'typeorm';
 import { Group } from './entity/group.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';

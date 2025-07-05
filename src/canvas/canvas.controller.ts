@@ -6,6 +6,8 @@ import {
   Get,
   Res,
   NotFoundException,
+  InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
@@ -89,13 +91,12 @@ export class CanvasController {
 
     const id = canvas.canvas_id;
     const meta = canvas.metaData;
-
     const responseData = {
       success: true,
       data: {
         canvas_id: id,
         pixels,
-        // compression: 'gzip',
+        compression: 'gzip',
         totalPixels: pixels.length,
         canvasSize: {
           width: meta.sizeX ?? 0,
@@ -104,13 +105,13 @@ export class CanvasController {
       },
     };
 
-    // const json = JSON.stringify(responseData);
-    // const gzipped = zlib.gzipSync(json);
+    const json = JSON.stringify(responseData);
+    const gzipped = zlib.gzipSync(json);
     res.set({
       'Content-Type': 'application/json',
-      // 'Content-Encoding': 'gzip',
+      'Content-Encoding': 'gzip',
     });
-    res.send(responseData);
+    res.send(gzipped);
   }
 
   @Get('default')
@@ -157,6 +158,28 @@ export class CanvasController {
         message: 'Internal server error',
         error: err?.message,
       };
+    }
+  }
+
+  @ApiOperation({
+    summary: '특정 캔버스의 모든 픽셀 데이터 조회',
+    description:
+      'canvas_id로 해당 캔버스의 전체 픽셀 데이터를 압축하여 반환합니다.',
+  })
+  @ApiQuery({
+    name: 'canvas_id',
+    required: true,
+    description: '조회할 캔버스 ID',
+  })
+  @Get('list')
+  async getCanvasList(@Query('status') status: string) {
+    try {
+      const result = await this.canvasService.getCanvasList(status);
+      return { canvases: result };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+
+      throw new InternalServerErrorException('서버 오류');
     }
   }
 }
