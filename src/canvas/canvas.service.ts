@@ -189,6 +189,7 @@ export class CanvasService {
       groupUser.group = savedGroup;
       groupUser.user = { id: 1 } as User;
       groupUser.joinedAt = new Date();
+      groupUser.canvas_id = newCanvas.id;
       await this.groupRepository.manager.save(GroupUser, groupUser);
       // 캔버스 생성 완료 반환
       return newCanvas;
@@ -272,10 +273,15 @@ export class CanvasService {
 
   // 남은 쿨다운(초) 반환
 
-  async getCooldownRemaining(userId: number, canvasId: string): Promise<number> {
+  async getCooldownRemaining(
+    userId: number,
+    canvasId: string
+  ): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
     const ttl = await this.redisClient.ttl(cooldownKey);
-    console.log(`[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`);
+    console.log(
+      `[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`
+    );
     return ttl > 0 ? ttl : 0; // 초
   }
 }
