@@ -82,7 +82,7 @@ create table if not exists groups
     made_by bigint not null,
     is_default boolean not null default false,
     primary key (id),
-    unique (name),
+    unique (canvas_id, name),
     constraint fk_canvas
         foreign key (canvas_id) references canvases(id)
             on delete cascade,

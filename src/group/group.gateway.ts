@@ -1,24 +1,17 @@
-import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
 import { ChatMessageDto } from './dto/chat-message.dto';
-import { JwtService } from '@nestjs/jwt';
 import Redis from 'ioredis';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { Group } from './entity/group.entity';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com'],
+    origin: ['http://localhost:5173', 'https://ws.pick-px.com', 'https://pick-px.com'],
     credentials: true,
   },
 })
@@ -37,22 +30,23 @@ export class GroupGateway {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    private readonly jwtService: JwtService
   ) {
     this.redisClient = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
   }
 
-  // JWT 토큰에서 userId 추출
-  private getUserIdFromSocket(client: Socket): number | null {
-    try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
-      if (!token) return null;
-      const payload = this.jwtService.decode(token) as any;
-      // JWT payload 구조: { sub: { userId: "123", nickName: "사용자명" } }
-      return Number(payload?.sub?.userId || payload?.userId || payload?.id);
-    } catch {
-      return null;
-    }
+  // 헬퍼: 인증 유저 ID 추출
+  private getUserIdFromClient(client: Socket): number | null {
+    const user = (client as any).user;
+    if (!user || (!user.userId && !user.id)) return null;
+    return Number(user.userId || user.id);
+  }
+
+  // 헬퍼: 그룹 멤버십 체크
+  private async checkGroupMembership(userId: number, groupId: number): Promise<GroupUser | null> {
+    return await this.groupUserRepository.findOne({
+      where: { user: { id: userId }, group: { id: groupId } },
+      relations: ['user', 'group'],
+    });
   }
 
   // 클라이언트가 특정 그룹 채팅방에 입장할 때 호출
@@ -61,16 +55,13 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    const userIdFromToken = this.getUserIdFromSocket(client);
-    if (!userIdFromToken) {
-      client.emit('chat-error', { message: '인증 정보가 올바르지 않습니다.' });
+    const userId = this.getUserIdFromClient(client);
+    if (!userId) {
+      client.emit('auth-error', { message: '인증 정보가 올바르지 않습니다.' });
       return;
     }
     // 그룹 참여 여부 확인
-    const isMember = await this.groupUserRepository.findOne({
-      where: { user: { id: userIdFromToken }, group: { id: Number(data.group_id) } },
-      relations: ['user', 'group'],
-    });
+    const isMember = await this.checkGroupMembership(userId, Number(data.group_id));
     if (!isMember) {
       client.emit('chat-error', { message: '이 채팅방에 참여할 권한이 없습니다.' });
       return;
@@ -91,7 +82,6 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    // group_id 룸에서 leave
     client.leave(data.group_id);
   }
 
@@ -102,16 +92,13 @@ export class GroupGateway {
     @ConnectedSocket() client: Socket
   ) {
     try {
-      const userIdFromToken = this.getUserIdFromSocket(client);
-      if (!userIdFromToken) {
-        client.emit('chat-error', { message: '인증 정보가 올바르지 않습니다.' });
+      const userId = this.getUserIdFromClient(client);
+      if (!userId) {
+        client.emit('auth-error', { message: '인증 정보가 올바르지 않습니다.' });
         return;
       }
       // 그룹 참여 여부 확인
-      const isMember = await this.groupUserRepository.findOne({
-        where: { user: { id: userIdFromToken }, group: { id: Number(body.group_id) } },
-        relations: ['user', 'group'],
-      });
+      const isMember = await this.checkGroupMembership(userId, Number(body.group_id));
       if (!isMember) {
         client.emit('chat-error', { message: '이 채팅방에 참여할 권한이 없습니다.' });
         return;
@@ -121,7 +108,7 @@ export class GroupGateway {
       const chatPayload = {
         // Redis에 저장되는 채팅 메시지의 id는 Date.now()로 임시로 부여됨, flush 시 DB에 저장할 때는 실제 DB의 auto-increment id가 부여됨
         id: Date.now(),
-        user: { id: userIdFromToken, user_name: isMember.user.userName },
+        user: { id: userId, user_name: isMember.user.userName },
         message: body.message,
         created_at: now.toISOString(),
       };

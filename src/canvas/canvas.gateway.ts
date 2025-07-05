@@ -1,19 +1,16 @@
-import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { CanvasService } from './canvas.service';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
+
+interface SocketUser {
+  userId?: number;
+  id?: number;
+  [key: string]: any;
+}
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com'],
+    origin: ['http://localhost:5173', 'https://ws.pick-px.com', 'https://pick-px.com'],
     credentials: true,
   },
 })
@@ -23,25 +20,12 @@ export class CanvasGateway {
 
   constructor(
     private readonly canvasService: CanvasService,
-    private readonly jwtService: JwtService,
   ) {}
 
-  // JWT 토큰에서 userId 추출
-  private getUserIdFromSocket(client: Socket): number | null {
-    const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
-    if (!token) return null;
-    const payload = this.jwtService.decode(token) as any;
-    return Number(payload?.sub?.userId || payload?.userId || payload?.id);
-  }
-
-  // 클라이언트가 소켓 연결 시
-  handleConnection(client: Socket) {
-    console.log('클라이언트 연결됨:', client.id);
-  }
-
-  // 클라이언트 연결 해제 시
-  handleDisconnect(client: Socket) {
-    console.log('클라이언트 연결 해제:', client.id);
+  private getUserIdFromClient(client: Socket): number | null {
+    const user = (client as any).user as SocketUser | undefined;
+    if (!user || (!user.userId && !user.id)) return null;
+    return Number(user.userId || user.id);
   }
 
   // 픽셀 그리기 요청
@@ -51,16 +35,16 @@ export class CanvasGateway {
     pixel: { canvas_id: string; x: number; y: number; color: string },
     @ConnectedSocket() client: Socket
   ) {
+    const userId = this.getUserIdFromClient(client);
+    if (!userId) {
+      client.emit('auth-error', { message: '인증 필요' });
+      return;
+    }
     try {
-      const userId = this.getUserIdFromSocket(client);
-      if (!userId) {
-        client.emit('error', { message: '인증 필요' });
-        return;
-      }
       const result = await this.canvasService.applyDrawPixelWithCooldown({ ...pixel, userId });
       if (!result.success) {
         console.log(`[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`);
-        client.emit('error', { message: result.message, remaining: result.remaining });
+        client.emit('pixel-error', { message: result.message, remaining: result.remaining });
         return;
       }
       // canvas_id 방에만 브로드캐스트
@@ -73,8 +57,7 @@ export class CanvasGateway {
         }
       });
     } catch (error) {
-      console.error('픽셀 그리기 실패:', error);
-      client.emit('error', { message: '픽셀 그리기 실패' });
+      client.emit('pixel-error', { message: '픽셀 그리기 실패' });
     }
   }
 
@@ -85,10 +68,14 @@ export class CanvasGateway {
   ) {
     client.join(data.canvas_id);
     // 쿨다운 정보 자동 푸시
-    const userId = this.getUserIdFromSocket(client);
+    const userId = this.getUserIdFromClient(client);
     if (userId && data.canvas_id) {
-      const remaining = await this.canvasService.getCooldownRemaining(userId, data.canvas_id);
-      client.emit('cooldown-info', { cooldown: remaining > 0, remaining });
+      try {
+        const remaining = await this.canvasService.getCooldownRemaining(userId, data.canvas_id);
+        client.emit('cooldown-info', { cooldown: remaining > 0, remaining });
+      } catch (error) {
+        // 쿨다운 정보 조회 실패 시 무시
+      }
     }
   }
 }
