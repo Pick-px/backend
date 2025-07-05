@@ -1,7 +1,12 @@
-import { Injectable, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
@@ -9,6 +14,7 @@ import { pixelQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { User } from '../user/entity/user.entity';
+import { CanvasInfo } from '../interface/CanvasInfo.interface';
 
 @Injectable()
 export class CanvasService {
@@ -20,7 +26,8 @@ export class CanvasService {
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
     @Inject('REDIS_CLIENT')
-    private readonly redisClient: Redis
+    private readonly redisClient: Redis,
+    private readonly dataSource: DataSource
   ) {}
 
   // 픽셀 저장 로직 (Redis만 사용)
@@ -146,7 +153,20 @@ export class CanvasService {
     }
   }
 
-  // 캔버스 생성 함수
+  async getCanvasList(status: string) {
+    try {
+      const bool: boolean = status === 'active' ? true : false;
+      const result: CanvasInfo[] = await this.dataSource.query(
+        `select id as "canvasId", title, created_at, size_x, size_y from canvases where is_active = $1::boolean`,
+        [bool]
+      );
+      return result;
+    } catch (err) {
+      throw new NotFoundException('DB에서 조회 실패!');
+    }
+  }
+
+  // 캔버스 생성 함수 refactor 필수
   async createCanvas(createCanvasDto: createCanvasDto): Promise<Canvas | null> {
     const { title, type, size_x, size_y, endedAt } = createCanvasDto;
 
@@ -158,6 +178,7 @@ export class CanvasService {
       sizeY: size_y,
       createdAt: new Date(),
       endedAt: endedAt,
+      is_active: true,
     });
 
     try {
@@ -172,7 +193,7 @@ export class CanvasService {
         updated_at: new Date(),
       });
       // 캔버스별 전체 채팅 그룹 자동 생성
-      const group = this.groupRepository.create({
+      const savedGroup = await this.groupRepository.save({
         name: '전체',
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -183,7 +204,6 @@ export class CanvasService {
         is_default: true,
       });
       // 그룹 저장
-      const savedGroup = await this.groupRepository.save(group);
       // 관리자(1번) 유저를 group_users에 추가
       const groupUser = new GroupUser();
       groupUser.group = savedGroup;
