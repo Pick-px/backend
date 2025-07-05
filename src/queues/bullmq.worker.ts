@@ -94,7 +94,7 @@ async function flushChatQueue() {
 
 // 픽셀/채팅 flush 순차 실행
 const FLUSH_PIXELS_MS = 10000; // 픽셀 flush 주기
-const FLUSH_CHAT_MS = 10000; // 채팅 flush 주기
+const FLUSH_CHAT_MS = 1000; // 채팅 flush 주기
 
 const flushDirtyPixelsInterval = setInterval(async () => {
   await flushDirtyPixels();

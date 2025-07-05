@@ -19,6 +19,7 @@ import { GroupModule } from './group/group.module';
 import { Group } from './group/entity/group.entity';
 import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
+import { AppGateway } from './app.gateway';
 
 @Module({
   imports: [
@@ -45,6 +46,6 @@ import { HttpModule } from '@nestjs/axios';
     HttpModule,
   ],
   controllers: [AppController, UserController, GroupController],
-  providers: [AppService, GroupService],
+  providers: [AppService, GroupService, AppGateway],
 })
 export class AppModule {}
