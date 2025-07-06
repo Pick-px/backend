@@ -5,8 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
@@ -27,6 +27,7 @@ export class CanvasService {
     private readonly groupRepository: Repository<Group>,
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
+    @InjectDataSource()
     private readonly dataSource: DataSource
   ) {}
 
@@ -43,15 +44,13 @@ export class CanvasService {
     color: string;
   }): Promise<boolean> {
     try {
-      const key = `${canvas_id}:${x}:${y}`;
-
-      // Redis에 저장
-      await this.redisClient.set(key, color);
-
-      // dirty_pixels set에 추가 (워커가 DB로 flush하기 위해)
-      await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
-
-      console.log(`Redis: 픽셀 저장 성공: ${key} = ${color}`);
+      // Store pixel in Redis hash
+      await this.redisClient.hset(`canvas:${canvas_id}`, `${x}:${y}`, color);
+      // Optionally, if you want to keep the dirty_pixels logic for the worker, you can comment out or remove the following line:
+      // await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
+      console.log(
+        `Redis: 픽셀 저장 성공: canvas:${canvas_id} ${x}:${y} = ${color}`
+      );
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
@@ -63,20 +62,17 @@ export class CanvasService {
   async getPixelsFromRedis(
     canvas_id: string
   ): Promise<{ x: number; y: number; color: string }[]> {
-    const keys = await this.redisClient.keys(`${canvas_id}:*`);
-    if (keys.length === 0) return [];
+    console.time('fromRedis');
+    const hash = await this.redisClient.hgetall(`canvas:${canvas_id}`);
+    console.timeEnd('fromRedis');
     const pixels: { x: number; y: number; color: string }[] = [];
-    for (const key of keys) {
-      const color = await this.redisClient.get(key);
-      if (color) {
-        const [, x, y] = key.split(':');
-        pixels.push({
-          x: Number(x),
-          y: Number(y),
-          color,
-        });
-      }
+    console.time('push');
+    for (const key in hash) {
+      const [x, y] = key.split(':').map(Number);
+      const color = hash[key];
+      pixels.push({ x, y, color });
     }
+    console.timeEnd('push');
     return pixels;
   }
 
@@ -84,20 +80,24 @@ export class CanvasService {
   async getPixelsFromDB(
     canvas_id: string
   ): Promise<{ x: number; y: number; color: string }[]> {
-    console.time('fromDB');
-    const dbPixels = await this.pixelRepository.find({
-      where: { canvasId: Number(canvas_id) },
-      select: ['x', 'y', 'color'],
-    });
-    console.timeEnd('fromDB');
-    console.time('map');
-    const result = dbPixels.map((pixel) => ({
-      x: pixel.x,
-      y: pixel.y,
-      color: pixel.color,
-    }));
-    console.timeEnd('map');
-    return result;
+    console.time('fromdb');
+    try {
+      const dbPixels: { x: number; y: number; color: string }[] =
+        await this.dataSource.query(
+          'SELECT x, y, color FROM pixels WHERE canvas_id = $1::INTEGER',
+          [canvas_id]
+        );
+      return dbPixels;
+    } finally {
+      console.timeEnd('fromdb');
+    }
+    // console.time('map');
+    // const result = dbPixels.map((pixel) => ({
+    //   x: pixel.x,
+    //   y: pixel.y,
+    //   color: pixel.color,
+    // }));
+    // console.timeEnd('map');
   }
 
   // 통합: Redis 우선, 없으면 DB + Redis 캐싱
@@ -123,10 +123,14 @@ export class CanvasService {
     // 2. DB에서 조회
     const dbPixels = await this.getPixelsFromDB(realCanvasId);
     // 3. Redis에 캐싱
+    const pipeline = this.redisClient.pipeline();
     for (const pixel of dbPixels) {
-      const key = `${realCanvasId}:${pixel.x}:${pixel.y}`;
-      await this.redisClient.set(key, pixel.color);
+      // const key = `${realCanvasId}:${pixel.x}:${pixel.y}`;
+      // await this.redisClient.set(key, pixel.color);
+      const field = `${pixel.x}:${pixel.y}`;
+      pipeline.hset(`canvas:${realCanvasId}`, field, pixel.color);
     }
+    await pipeline.exec();
     return dbPixels;
   }
 
@@ -137,8 +141,10 @@ export class CanvasService {
     y: number
   ): Promise<string | null> {
     try {
-      const key = `${canvas_id}:${x}:${y}`;
-      const color = await this.redisClient.get(key);
+      // const key = `${canvas_id}:${x}:${y}`;
+      const key = `canvas:${canvas_id}`;
+      const field = `${x}:${y}`;
+      const color = await this.redisClient.hget(key, field);
 
       if (color) {
         console.log(`Redis: 픽셀 조회 성공: ${key} = ${color}`);
@@ -231,7 +237,7 @@ export class CanvasService {
     y: number;
     color: string;
   }): Promise<boolean> {
-    return this.tryDrawPixel({ canvas_id, x, y, color });
+    return await this.tryDrawPixel({ canvas_id, x, y, color });
   }
 
   // 캔버스 ID로 캔버스 정보 조회
