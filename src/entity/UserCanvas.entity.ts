@@ -21,6 +21,9 @@ export class UserCanvas {
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;
 
+  @Column({ name: 'count', type: 'integer', default: 0 })
+  count: number;
+
   @Column({ name: 'joined_at', type: 'timestamp' })
   joinedAt: Date;
 }

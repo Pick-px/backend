@@ -117,7 +117,6 @@ create table if not exists chats
     user_id bigint not null,
     message varchar(50) not null,
     created_at timestamp not null,
-    updated_at timestamp not null,
     primary key(id),
     constraint fk_groups
         foreign key (group_id) references groups(id) on delete cascade,
@@ -128,7 +127,7 @@ create table if not exists chats
 alter table chats
     owner to pixel_user;
 
--- 관리자 계정 seed (id=1, email=pickpx0617@gmail.com, user_name=gmg team)
-INSERT INTO users (id, email, password, created_at, updated_at, user_name)
-VALUES (1, 'pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
-ON CONFLICT (id) DO NOTHING;
+-- 관리자 계정 seed (email=pickpx0617@gmail.com, user_name=gmg team)
+INSERT INTO users (email, password, created_at, updated_at, user_name)
+VALUES ('pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
+ON CONFLICT (email) DO NOTHING;

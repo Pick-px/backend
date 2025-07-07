@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
 import { Group } from './group.entity';
 import { User } from '../../user/entity/user.entity';
 
@@ -18,9 +18,6 @@ export class Chat {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @ManyToOne(() => Group, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'group_id' })
