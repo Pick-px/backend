@@ -3,6 +3,8 @@ name: Deploy to EKS
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -12,6 +14,19 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+    
+    - name: Set deployment environment
+      id: env
+      run: |
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "environment=staging" >> $GITHUB_OUTPUT
+          echo "namespace=nestjs-app-staging" >> $GITHUB_OUTPUT
+          echo "image_tag=pr-${{ github.event.number }}-${{ github.sha }}" >> $GITHUB_OUTPUT
+        else
+          echo "environment=production" >> $GITHUB_OUTPUT
+          echo "namespace=nestjs-app" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+        fi
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -68,13 +83,18 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: nestjs-app
-        IMAGE_TAG: ${{ github.sha }}
+        IMAGE_TAG: ${{ steps.env.outputs.image_tag }}
+        ENVIRONMENT: ${{ steps.env.outputs.environment }}
       run: |
-        echo "🏗️ Docker 이미지 빌드 및 푸시..."
+        echo "🏗️ Docker 이미지 빌드 및 푸시... (환경: $ENVIRONMENT)"
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        # PR이 아닌 경우에만 latest 태그 생성
+        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        fi
         
         echo "✅ 이미지 푸시 완료: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
     
@@ -127,41 +147,74 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: nestjs-app
-        IMAGE_TAG: ${{ github.sha }}
+        IMAGE_TAG: ${{ steps.env.outputs.image_tag }}
+        NAMESPACE: ${{ steps.env.outputs.namespace }}
+        ENVIRONMENT: ${{ steps.env.outputs.environment }}
       run: |
-        echo "🚀 EKS 배포 시작..."
+        echo "🚀 EKS 배포 시작... (환경: $ENVIRONMENT, 네임스페이스: $NAMESPACE)"
         
-        # Create namespace
-        echo "📁 네임스페이스 생성..."
-        kubectl apply -f k8s/namespace.yaml
+        # Create namespace for staging if it's a PR
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "📁 스테이징 네임스페이스 생성..."
+          kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        else
+          echo "📁 프로덕션 네임스페이스 생성..."
+          kubectl apply -f k8s/namespace.yaml
+        fi
         
         # Create or update secrets
         echo "🔐 시크릿 생성/업데이트..."
         kubectl create secret generic app-secrets \
           --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
           --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
-          --namespace=nestjs-app \
+          --namespace=$NAMESPACE \
           --dry-run=client -o yaml | kubectl apply -f -
         
-        # Update deployment image
-        echo "🔄 배포 이미지 업데이트..."
-        sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s/deployment.yaml
+        # Copy and update deployment files for the environment
+        echo "🔄 배포 파일 준비..."
+        cp -r k8s k8s-temp
+        
+        # Update image in deployment
+        sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/deployment.yaml
+        
+        # Update namespace in all files
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          sed -i "s|namespace: nestjs-app|namespace: $NAMESPACE|g" k8s-temp/*.yaml
+          sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/deployment.yaml
+          sed -i "s|name: nestjs-service|name: nestjs-service-staging|g" k8s-temp/service.yaml
+          sed -i "s|name: nestjs-hpa|name: nestjs-hpa-staging|g" k8s-temp/hpa.yaml
+          sed -i "s|name: nestjs-ingress|name: nestjs-ingress-staging|g" k8s-temp/ingress.yaml
+        fi
         
         # Deploy application
         echo "📦 애플리케이션 배포..."
-        kubectl apply -f k8s/deployment.yaml
-        kubectl apply -f k8s/service.yaml
-        kubectl apply -f k8s/hpa.yaml
-        kubectl apply -f k8s/ingress.yaml
+        kubectl apply -f k8s-temp/deployment.yaml
+        kubectl apply -f k8s-temp/service.yaml
+        kubectl apply -f k8s-temp/hpa.yaml
+        
+        # Only apply ingress for production
+        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          kubectl apply -f k8s-temp/ingress.yaml
+        fi
         
         echo "✅ 리소스 배포 완료"
     
     - name: Monitor Deployment Progress
+      env:
+        NAMESPACE: ${{ steps.env.outputs.namespace }}
+        ENVIRONMENT: ${{ steps.env.outputs.environment }}
       run: |
-        echo "🔍 배포 진행 상황 모니터링..."
+        echo "🔍 배포 진행 상황 모니터링... (환경: $ENVIRONMENT)"
+        
+        # Determine deployment name based on environment
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          DEPLOYMENT_NAME="nestjs-app-staging"
+        else
+          DEPLOYMENT_NAME="nestjs-app"
+        fi
         
         # Start rollout status check in background
-        kubectl rollout status deployment/nestjs-app -n nestjs-app --timeout=600s &
+        kubectl rollout status deployment/$DEPLOYMENT_NAME -n $NAMESPACE --timeout=600s &
         ROLLOUT_PID=$!
         
         # Monitor pods and logs in real-time
@@ -170,21 +223,23 @@ jobs:
           echo "--- 체크 #$i ($(date '+%H:%M:%S')) ---"
           
           echo "Pod 상태:"
-          kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+          kubectl get pods -n $NAMESPACE -l app=$DEPLOYMENT_NAME -o wide
           
           echo "ReplicaSet 상태:"
-          kubectl get rs -n nestjs-app -l app=nestjs-app -o wide
+          kubectl get rs -n $NAMESPACE -l app=$DEPLOYMENT_NAME -o wide
           
           echo "최근 이벤트:"
-          kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -3
+          kubectl get events -n $NAMESPACE --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -3
           
           # Get logs from any running pods
-          PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+          PODS=$(kubectl get pods -n $NAMESPACE -l app=$DEPLOYMENT_NAME -o jsonpath='{.items[*].metadata.name}')
           if [ ! -z "$PODS" ]; then
             echo "현재 Pod 로그:"
             for pod in $PODS; do
-              echo "--- $pod 로그 ---"
-              kubectl logs $pod -n nestjs-app --tail=5 --since=30s 2>/dev/null || echo "로그 없음"
+              echo "--- $pod 로그 (전체) ---"
+              kubectl logs $pod -n $NAMESPACE --tail=100 2>/dev/null || echo "로그 없음"
+              echo "--- $pod 이전 로그 ---"
+              kubectl logs $pod -n $NAMESPACE --previous --tail=100 2>/dev/null || echo "이전 로그 없음"
             done
           fi
           
@@ -203,39 +258,48 @@ jobs:
     
     - name: Debug Deployment Issues
       if: failure()
+      env:
+        NAMESPACE: ${{ steps.env.outputs.namespace }}
       run: |
         echo "🔍 ===== 배포 실패 디버깅 ====="
         
+        # Determine deployment name based on environment
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          DEPLOYMENT_NAME="nestjs-app-staging"
+        else
+          DEPLOYMENT_NAME="nestjs-app"
+        fi
+        
         echo "📊 Deployment 상세 정보:"
-        kubectl describe deployment nestjs-app -n nestjs-app
+        kubectl describe deployment $DEPLOYMENT_NAME -n $NAMESPACE
         
         echo ""
         echo "📊 ReplicaSet 상태:"
-        kubectl describe rs -n nestjs-app -l app=nestjs-app
+        kubectl describe rs -n $NAMESPACE -l app=$DEPLOYMENT_NAME
         
         echo ""
         echo "🚨 실패한 Pod 상세 정보:"
-        kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+        kubectl get pods -n $NAMESPACE -l app=$DEPLOYMENT_NAME -o wide
         
         # 각 Pod의 상세 정보와 로그 출력
-        PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+        PODS=$(kubectl get pods -n $NAMESPACE -l app=$DEPLOYMENT_NAME -o jsonpath='{.items[*].metadata.name}')
         for pod in $PODS; do
           echo ""
           echo "--- Pod: $pod 상세 정보 ---"
-          kubectl describe pod $pod -n nestjs-app
+          kubectl describe pod $pod -n $NAMESPACE
           
           echo ""
           echo "--- Pod: $pod 현재 로그 ---"
-          kubectl logs $pod -n nestjs-app --tail=50 || echo "현재 로그 없음"
+          kubectl logs $pod -n $NAMESPACE --tail=50 || echo "현재 로그 없음"
           
           echo ""
           echo "--- Pod: $pod 이전 로그 ---"
-          kubectl logs $pod -n nestjs-app --previous --tail=50 || echo "이전 로그 없음"
+          kubectl logs $pod -n $NAMESPACE --previous --tail=50 || echo "이전 로그 없음"
         done
         
         echo ""
         echo "🔍 최근 이벤트 (상세):"
-        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -20
+        kubectl get events -n $NAMESPACE --sort-by='.lastTimestamp' | tail -20
         
         echo ""
         echo "🔍 클러스터 리소스 상태:"
@@ -244,41 +308,78 @@ jobs:
         
         echo ""
         echo "🔍 네임스페이스 리소스:"
-        kubectl get all -n nestjs-app
+        kubectl get all -n $NAMESPACE
         
         echo ""
         echo "🔍 Secret 및 ConfigMap 상태:"
-        kubectl get secrets -n nestjs-app
-        kubectl get configmaps -n nestjs-app
+        kubectl get secrets -n $NAMESPACE
+        kubectl get configmaps -n $NAMESPACE
     
     - name: Post-Deployment Verification
       if: success()
+      env:
+        NAMESPACE: ${{ steps.env.outputs.namespace }}
+        ENVIRONMENT: ${{ steps.env.outputs.environment }}
       run: |
-        echo "🚀 ===== 배포 완료 확인 ====="
+        echo "🚀 ===== 배포 완료 확인 ($ENVIRONMENT) ====="
+        
+        # Determine deployment name based on environment
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          DEPLOYMENT_NAME="nestjs-app-staging"
+        else
+          DEPLOYMENT_NAME="nestjs-app"
+        fi
         
         echo "📊 클러스터 노드 상태:"
         kubectl get nodes -o wide
         
         echo ""
         echo "🚀 Pod 상태:"
-        kubectl get pods -n nestjs-app -o wide
+        kubectl get pods -n $NAMESPACE -o wide
         
         echo ""
         echo "🌐 서비스 상태:"
-        kubectl get svc -n nestjs-app
+        kubectl get svc -n $NAMESPACE
         
         echo ""
-        echo "🔗 Ingress 상태:"
-        kubectl get ingress -n nestjs-app
+        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          echo "🔗 Ingress 상태:"
+          kubectl get ingress -n $NAMESPACE
+        else
+          echo "🔗 스테이징 환경 (Ingress 없음)"
+        fi
         
         echo ""
         echo "📝 최근 이벤트:"
-        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -10
+        kubectl get events -n $NAMESPACE --sort-by='.lastTimestamp' | tail -10
         
         echo ""
         echo "🏥 애플리케이션 로그 (마지막 20줄):"
-        kubectl logs -n nestjs-app deployment/nestjs-app --tail=20 || echo "로그를 가져올 수 없습니다"
+        kubectl logs -n $NAMESPACE deployment/$DEPLOYMENT_NAME --tail=20 || echo "로그를 가져올 수 없습니다"
         
         echo ""
         echo "✅ 배포 완료!"
-        echo "🌐 WebSocket: https://ws.pick-px.com"
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "🧪 스테이징 환경: PR #${{ github.event.number }}"
+        else
+          echo "🌐 프로덕션: https://ws.pick-px.com"
+        fi
+    
+    - name: Comment PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🚀 **스테이징 배포 완료!**
+            
+            - **환경**: 스테이징
+            - **네임스페이스**: nestjs-app-staging
+            - **이미지 태그**: pr-${{ github.event.number }}-${{ github.sha }}
+            - **배포 시간**: ${new Date().toISOString()}
+            
+            스테이징 환경에서 테스트를 진행해주세요.`
+          })
