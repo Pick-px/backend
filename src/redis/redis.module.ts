@@ -24,12 +24,6 @@ useFactory: (configService: ConfigService) => {
             password: configService.get('REDIS_PASSWORD') || undefined,
           });
         }
-
-     
-
-   
-  
-
         return redis;
       },
 */
@@ -48,8 +42,11 @@ const createRedisClient = (configService: ConfigService): Redis => {
     // 프로덕션: REDIS_URL 사용 (TLS 지원)
     redis = new Redis(redisUrl, {
       tls: redisUrl.startsWith('rediss://') ? {} : undefined,
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 100, 3000); // 최대 3초 대기
+        return delay;
+      },
     });
   } else {
     // 로컬 개발: 기존 설정 사용

@@ -46,11 +46,11 @@ import { AppGateway } from './app.gateway';
           // 로컬 개발: 기존 설정 사용
           return {
             type: 'postgres',
-            host: 'postgres',
-            port: 5432,
-            username: 'pixel_user',
-            password: 'teamgmgdogs',
-            database: 'pick_px',
+            host: configService.get<string>('POSTGRES_HOST'),
+            port: parseInt(configService.get<string>('POSTGRES_PORT') || '5432', 10),
+            username: configService.get<string>('POSTGRES_USER'),
+            password: configService.get<string>('POSTGRES_PASSWORD'),
+            database: configService.get<string>('POSTGRES_DB'),
             autoLoadEntities: true,
             entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
             synchronize: true, // 개발에서만 true
