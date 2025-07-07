@@ -24,11 +24,11 @@ export const AppDataSource = new DataSource({
       }
     : {
         // 로컬 개발: 기존 설정 사용
-        host: 'postgres',
-        port: 5432,
-        username: 'pixel_user',
-        password: 'teamgmgdogs',
-        database: 'pick_px',
+        host: process.env.POSTGRES_HOST,
+        port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+        username: process.env.POSTGRES_USER,
+        password: process.env.POSTGRES_PASSWORD,
+        database: process.env.POSTGRES_DB,
       }),
   entities: [Canvas, Pixel, UserCanvas, User, Group, Chat, GroupUser],
   synchronize: false,
