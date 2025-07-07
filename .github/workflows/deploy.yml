@@ -3,308 +3,323 @@ name: Deploy to EKS
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-northeast-2
-    
-    - name: Verify AWS Configuration
-      run: |
-        echo "🔍 AWS 설정 확인..."
-        aws sts get-caller-identity
-        aws eks describe-cluster --name nestjs-cluster --region ap-northeast-2 --query 'cluster.status'
-    
-    - name: Install eksctl
-      run: |
-        # eksctl 설치
-        curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-        sudo mv /tmp/eksctl /usr/local/bin
-        eksctl version
-    
-    - name: Install kubectl
-      run: |
-        # kubectl 최신 버전 설치
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-        kubectl version --client
-    
-    - name: Update kubeconfig and verify connection
-      run: |
-        echo "🔧 EKS kubeconfig 설정..."
-        aws eks update-kubeconfig --region ap-northeast-2 --name nestjs-cluster
-        
-        echo "🔍 클러스터 연결 테스트..."
-        kubectl cluster-info
-        kubectl get nodes -o wide
-        
-        echo "🔍 현재 context 확인..."
-        kubectl config current-context
-    
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-    
-    - name: Verify ECR Repository
-      run: |
-        echo "🔍 ECR 리포지토리 확인..."
-        aws ecr describe-repositories --repository-names nestjs-app --region ap-northeast-2 || {
-          echo "❌ ECR 리포지토리가 존재하지 않습니다. 생성합니다..."
-          aws ecr create-repository --repository-name nestjs-app --region ap-northeast-2
-        }
-    
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: nestjs-app
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        echo "🏗️ Docker 이미지 빌드 및 푸시..."
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        
-        echo "✅ 이미지 푸시 완료: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-    
-    - name: Install AWS Load Balancer Controller (if not exists)
-      run: |
-        echo "🔍 AWS Load Balancer Controller 확인..."
-        if ! kubectl get deployment -n kube-system aws-load-balancer-controller > /dev/null 2>&1; then
-          echo "📦 AWS Load Balancer Controller 설치 중..."
-          
-          # Download IAM policy
-          curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
-          
-          # Create IAM policy (ignore if exists)
-          aws iam create-policy \
-            --policy-name AWSLoadBalancerControllerIAMPolicy \
-            --policy-document file://iam_policy.json || echo "IAM 정책이 이미 존재합니다"
-          
-          # Create service account with eksctl
-          eksctl create iamserviceaccount \
-            --cluster=nestjs-cluster \
-            --namespace=kube-system \
-            --name=aws-load-balancer-controller \
-            --role-name AmazonEKSLoadBalancerControllerRole \
-            --attach-policy-arn=arn:aws:iam::863518449560:policy/AWSLoadBalancerControllerIAMPolicy \
-            --approve \
-            --region=ap-northeast-2 || echo "서비스 계정이 이미 존재합니다"
-          
-          # Install cert-manager
-          kubectl apply \
-            --validate=false \
-            -f https://github.com/jetstack/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-          
-          # Wait for cert-manager
-          echo "⏳ cert-manager 준비 대기 중..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-          
-          # Download and apply AWS Load Balancer Controller
-          curl -Lo v2_7_2_full.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.7.2/v2_7_2_full.yaml
-          sed -i.bak -e 's|your-cluster-name|nestjs-cluster|' v2_7_2_full.yaml
-          kubectl apply -f v2_7_2_full.yaml
-          
-          # Wait for controller to be ready
-          echo "⏳ AWS Load Balancer Controller 준비 대기 중..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=aws-load-balancer-controller -n kube-system --timeout=300s
-        else
-          echo "✅ AWS Load Balancer Controller가 이미 설치되어 있습니다"
-        fi
-    
-    - name: Deploy to EKS
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: nestjs-app
-        IMAGE_TAG: ${{ steps.env.outputs.image_tag }}
-        NAMESPACE: ${{ steps.env.outputs.namespace }}
-        ENVIRONMENT: ${{ steps.env.outputs.environment }}
-      run: |
-        echo "🚀 EKS 배포 시작... (환경: $ENVIRONMENT, 네임스페이스: $NAMESPACE)"
-        
-        # Create namespace for staging if it's a PR
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          echo "📁 스테이징 네임스페이스 생성..."
-          kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-        else
-          echo "📁 프로덕션 네임스페이스 생성..."
-          kubectl apply -f k8s/namespace.yaml
-        fi
-        
-        # Create or update secrets
-        echo "🔐 시크릿 생성/업데이트..."
-        kubectl create secret generic app-secrets \
-          --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
-          --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
-          --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
-          --namespace=$NAMESPACE \
-          --dry-run=client -o yaml | kubectl apply -f -
-        
-        # Copy and update deployment files for the environment
-        echo "🔄 배포 파일 준비..."
-        cp -r k8s k8s-temp
-        
-        # Update image in deployment
-        sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/deployment.yaml
-        
-        # Update namespace in all files
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          sed -i "s|namespace: nestjs-app|namespace: $NAMESPACE|g" k8s-temp/*.yaml
-          sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/deployment.yaml
-          sed -i "s|app: nestjs-app|app: nestjs-app-staging|g" k8s-temp/deployment.yaml
-          sed -i "s|name: nestjs-service|name: nestjs-service-staging|g" k8s-temp/service.yaml
-          sed -i "s|name: nestjs-hpa|name: nestjs-hpa-staging|g" k8s-temp/hpa.yaml
-          sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/hpa.yaml
-          sed -i "s|name: nestjs-ingress|name: nestjs-ingress-staging|g" k8s-temp/ingress.yaml
-        fi
-        
-        # Deploy application
-        echo "📦 애플리케이션 배포..."
-        kubectl apply -f k8s-temp/deployment.yaml
-        kubectl apply -f k8s-temp/service.yaml
-        kubectl apply -f k8s-temp/hpa.yaml
-        
-        # Only apply ingress for production
-        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-          kubectl apply -f k8s-temp/ingress.yaml
-        fi
-        
-        echo "✅ 리소스 배포 완료"
-    
-    - name: Monitor Deployment Progress
-      run: |
-        echo "🔍 배포 진행 상황 모니터링..."
-        
-        # Start rollout status check in background
-        kubectl rollout status deployment/nestjs-app -n nestjs-app --timeout=600s &
-        ROLLOUT_PID=$!
-        
-        # Monitor pods and logs in real-time
-        echo "📊 실시간 모니터링 시작..."
-        for i in {1..30}; do
-          echo "--- 체크 #$i ($(date '+%H:%M:%S')) ---"
-          
-          echo "Pod 상태:"
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set deployment environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "namespace=nestjs-app-staging" >> $GITHUB_OUTPUT
+            echo "image_tag=pr-${{ github.event.number }}-${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "namespace=nestjs-app" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Verify AWS Configuration
+        run: |
+          echo "🔍 AWS 설정 확인..."
+          aws sts get-caller-identity
+          aws eks describe-cluster --name nestjs-cluster --region ap-northeast-2 --query 'cluster.status'
+
+      - name: Install eksctl
+        run: |
+          # eksctl 설치
+          curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/eksctl /usr/local/bin
+          eksctl version
+
+      - name: Install kubectl
+        run: |
+          # kubectl 최신 버전 설치
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Update kubeconfig and verify connection
+        run: |
+          echo "🔧 EKS kubeconfig 설정..."
+          aws eks update-kubeconfig --region ap-northeast-2 --name nestjs-cluster
+
+          echo "🔍 클러스터 연결 테스트..."
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+          echo "🔍 현재 context 확인..."
+          kubectl config current-context
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Verify ECR Repository
+        run: |
+          echo "🔍 ECR 리포지토리 확인..."
+          aws ecr describe-repositories --repository-names nestjs-app --region ap-northeast-2 || {
+            echo "❌ ECR 리포지토리가 존재하지 않습니다. 생성합니다..."
+            aws ecr create-repository --repository-name nestjs-app --region ap-northeast-2
+          }
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: nestjs-app
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "🏗️ Docker 이미지 빌드 및 푸시..."
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+          echo "✅ 이미지 푸시 완료: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Install AWS Load Balancer Controller (if not exists)
+        run: |
+          echo "🔍 AWS Load Balancer Controller 확인..."
+          if ! kubectl get deployment -n kube-system aws-load-balancer-controller > /dev/null 2>&1; then
+            echo "📦 AWS Load Balancer Controller 설치 중..."
+            
+            # Download IAM policy
+            curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
+            
+            # Create IAM policy (ignore if exists)
+            aws iam create-policy \
+              --policy-name AWSLoadBalancerControllerIAMPolicy \
+              --policy-document file://iam_policy.json || echo "IAM 정책이 이미 존재합니다"
+            
+            # Create service account with eksctl
+            eksctl create iamserviceaccount \
+              --cluster=nestjs-cluster \
+              --namespace=kube-system \
+              --name=aws-load-balancer-controller \
+              --role-name AmazonEKSLoadBalancerControllerRole \
+              --attach-policy-arn=arn:aws:iam::863518449560:policy/AWSLoadBalancerControllerIAMPolicy \
+              --approve \
+              --region=ap-northeast-2 || echo "서비스 계정이 이미 존재합니다"
+            
+            # Install cert-manager
+            kubectl apply \
+              --validate=false \
+              -f https://github.com/jetstack/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+            
+            # Wait for cert-manager
+            echo "⏳ cert-manager 준비 대기 중..."
+            kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+            
+            # Download and apply AWS Load Balancer Controller
+            curl -Lo v2_7_2_full.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.7.2/v2_7_2_full.yaml
+            sed -i.bak -e 's|your-cluster-name|nestjs-cluster|' v2_7_2_full.yaml
+            kubectl apply -f v2_7_2_full.yaml
+            
+            # Wait for controller to be ready
+            echo "⏳ AWS Load Balancer Controller 준비 대기 중..."
+            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=aws-load-balancer-controller -n kube-system --timeout=300s
+          else
+            echo "✅ AWS Load Balancer Controller가 이미 설치되어 있습니다"
+          fi
+
+      - name: Deploy to EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: nestjs-app
+          IMAGE_TAG: ${{ steps.env.outputs.image_tag }}
+          NAMESPACE: ${{ steps.env.outputs.namespace }}
+          ENVIRONMENT: ${{ steps.env.outputs.environment }}
+        run: |
+          echo "🚀 EKS 배포 시작... (환경: $ENVIRONMENT, 네임스페이스: $NAMESPACE)"
+
+          # Create namespace for staging if it's a PR
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "📁 스테이징 네임스페이스 생성..."
+            kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+          else
+            echo "📁 프로덕션 네임스페이스 생성..."
+            kubectl apply -f k8s/namespace.yaml
+          fi
+
+          # Create or update secrets
+          echo "🔐 시크릿 생성/업데이트..."
+          kubectl create secret generic app-secrets \
+            --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
+            --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
+            --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+            --namespace=$NAMESPACE \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # Copy and update deployment files for the environment
+          echo "🔄 배포 파일 준비..."
+          cp -r k8s k8s-temp
+
+          # Update image in deployment
+          sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/deployment.yaml
+
+          # Update namespace in all files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            sed -i "s|namespace: nestjs-app|namespace: $NAMESPACE|g" k8s-temp/*.yaml
+            sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/deployment.yaml
+            sed -i "s|app: nestjs-app|app: nestjs-app-staging|g" k8s-temp/deployment.yaml
+            sed -i "s|name: nestjs-service|name: nestjs-service-staging|g" k8s-temp/service.yaml
+            sed -i "s|name: nestjs-hpa|name: nestjs-hpa-staging|g" k8s-temp/hpa.yaml
+            sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/hpa.yaml
+            sed -i "s|name: nestjs-ingress|name: nestjs-ingress-staging|g" k8s-temp/ingress.yaml
+          fi
+
+          # Deploy application
+          echo "📦 애플리케이션 배포..."
+          kubectl apply -f k8s-temp/deployment.yaml
+          kubectl apply -f k8s-temp/service.yaml
+          kubectl apply -f k8s-temp/hpa.yaml
+
+          # Only apply ingress for production
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            kubectl apply -f k8s-temp/ingress.yaml
+          fi
+
+          echo "✅ 리소스 배포 완료"
+
+      - name: Monitor Deployment Progress
+        run: |
+          echo "🔍 배포 진행 상황 모니터링..."
+
+          # Start rollout status check in background
+          kubectl rollout status deployment/nestjs-app -n nestjs-app --timeout=600s &
+          ROLLOUT_PID=$!
+
+          # Monitor pods and logs in real-time
+          echo "📊 실시간 모니터링 시작..."
+          for i in {1..10}; do
+            echo "--- 체크 #$i ($(date '+%H:%M:%S')) ---"
+            
+            echo "Pod 상태:"
+            kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+            
+            echo "ReplicaSet 상태:"
+            kubectl get rs -n nestjs-app -l app=nestjs-app -o wide
+            
+            echo "최근 이벤트:"
+            kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -3
+            
+            # Get logs from any running pods
+            PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+            if [ ! -z "$PODS" ]; then
+              echo "현재 Pod 로그:"
+              for pod in $PODS; do
+                echo "--- $pod 로그 ---"
+                kubectl logs $pod -n nestjs-app --tail=5 --since=30s 2>/dev/null || echo "로그 없음"
+              done
+            fi
+            
+            # Check if rollout is still running
+            if ! kill -0 $ROLLOUT_PID 2>/dev/null; then
+              echo "✅ 롤아웃 완료!"
+              break
+            fi
+            
+            echo "⏳ 20초 후 다시 확인..."
+            sleep 20
+          done
+
+          # Wait for rollout to complete
+          wait $ROLLOUT_PID
+
+      - name: Debug Deployment Issues
+        if: failure()
+        run: |
+          echo "🔍 ===== 배포 실패 디버깅 ====="
+
+          echo "📊 Deployment 상세 정보:"
+          kubectl describe deployment nestjs-app -n nestjs-app
+
+          echo ""
+          echo "📊 ReplicaSet 상태:"
+          kubectl describe rs -n nestjs-app -l app=nestjs-app
+
+          echo ""
+          echo "🚨 실패한 Pod 상세 정보:"
           kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
-          
-          echo "ReplicaSet 상태:"
-          kubectl get rs -n nestjs-app -l app=nestjs-app -o wide
-          
-          echo "최근 이벤트:"
-          kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -3
-          
-          # Get logs from any running pods
+
+          # 각 Pod의 상세 정보와 로그 출력
           PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
-          if [ ! -z "$PODS" ]; then
-            echo "현재 Pod 로그:"
-            for pod in $PODS; do
-              echo "--- $pod 로그 ---"
-              kubectl logs $pod -n nestjs-app --tail=5 --since=30s 2>/dev/null || echo "로그 없음"
-            done
-          fi
-          
-          # Check if rollout is still running
-          if ! kill -0 $ROLLOUT_PID 2>/dev/null; then
-            echo "✅ 롤아웃 완료!"
-            break
-          fi
-          
-          echo "⏳ 20초 후 다시 확인..."
-          sleep 20
-        done
-        
-        # Wait for rollout to complete
-        wait $ROLLOUT_PID
-    
-    - name: Debug Deployment Issues
-      if: failure()
-      run: |
-        echo "🔍 ===== 배포 실패 디버깅 ====="
-        
-        echo "📊 Deployment 상세 정보:"
-        kubectl describe deployment nestjs-app -n nestjs-app
-        
-        echo ""
-        echo "📊 ReplicaSet 상태:"
-        kubectl describe rs -n nestjs-app -l app=nestjs-app
-        
-        echo ""
-        echo "🚨 실패한 Pod 상세 정보:"
-        kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
-        
-        # 각 Pod의 상세 정보와 로그 출력
-        PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
-        for pod in $PODS; do
+          for pod in $PODS; do
+            echo ""
+            echo "--- Pod: $pod 상세 정보 ---"
+            kubectl describe pod $pod -n nestjs-app
+            
+            echo ""
+            echo "--- Pod: $pod 현재 로그 ---"
+            kubectl logs $pod -n nestjs-app --tail=50 || echo "현재 로그 없음"
+            
+            echo ""
+            echo "--- Pod: $pod 이전 로그 ---"
+            kubectl logs $pod -n nestjs-app --previous --tail=50 || echo "이전 로그 없음"
+          done
+
           echo ""
-          echo "--- Pod: $pod 상세 정보 ---"
-          kubectl describe pod $pod -n nestjs-app
-          
+          echo "🔍 최근 이벤트 (상세):"
+          kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -20
+
           echo ""
-          echo "--- Pod: $pod 현재 로그 ---"
-          kubectl logs $pod -n nestjs-app --tail=50 || echo "현재 로그 없음"
-          
+          echo "🔍 클러스터 리소스 상태:"
+          kubectl top nodes || echo "메트릭 서버 사용 불가"
+          kubectl describe nodes | grep -A 10 "Allocated resources" || echo "노드 리소스 정보 없음"
+
           echo ""
-          echo "--- Pod: $pod 이전 로그 ---"
-          kubectl logs $pod -n nestjs-app --previous --tail=50 || echo "이전 로그 없음"
-        done
-        
-        echo ""
-        echo "🔍 최근 이벤트 (상세):"
-        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -20
-        
-        echo ""
-        echo "🔍 클러스터 리소스 상태:"
-        kubectl top nodes || echo "메트릭 서버 사용 불가"
-        kubectl describe nodes | grep -A 10 "Allocated resources" || echo "노드 리소스 정보 없음"
-        
-        echo ""
-        echo "🔍 네임스페이스 리소스:"
-        kubectl get all -n nestjs-app
-        
-        echo ""
-        echo "🔍 Secret 및 ConfigMap 상태:"
-        kubectl get secrets -n nestjs-app
-        kubectl get configmaps -n nestjs-app
-    
-    - name: Post-Deployment Verification
-      if: success()
-      run: |
-        echo "🚀 ===== 배포 완료 확인 ====="
-        
-        echo "📊 클러스터 노드 상태:"
-        kubectl get nodes -o wide
-        
-        echo ""
-        echo "🚀 Pod 상태:"
-        kubectl get pods -n nestjs-app -o wide
-        
-        echo ""
-        echo "🌐 서비스 상태:"
-        kubectl get svc -n nestjs-app
-        
-        echo ""
-        echo "🔗 Ingress 상태:"
-        kubectl get ingress -n nestjs-app
-        
-        echo ""
-        echo "📝 최근 이벤트:"
-        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -10
-        
-        echo ""
-        echo "🏥 애플리케이션 로그 (마지막 20줄):"
-        kubectl logs -n nestjs-app deployment/nestjs-app --tail=20 || echo "로그를 가져올 수 없습니다"
-        
-        echo ""
-        echo "✅ 배포 완료!"
-        echo "🌐 WebSocket: https://ws.pick-px.com"
+          echo "🔍 네임스페이스 리소스:"
+          kubectl get all -n nestjs-app
+
+          echo ""
+          echo "🔍 Secret 및 ConfigMap 상태:"
+          kubectl get secrets -n nestjs-app
+          kubectl get configmaps -n nestjs-app
+
+      - name: Post-Deployment Verification
+        if: success()
+        run: |
+          echo "🚀 ===== 배포 완료 확인 ====="
+
+          echo "📊 클러스터 노드 상태:"
+          kubectl get nodes -o wide
+
+          echo ""
+          echo "🚀 Pod 상태:"
+          kubectl get pods -n nestjs-app -o wide
+
+          echo ""
+          echo "🌐 서비스 상태:"
+          kubectl get svc -n nestjs-app
+
+          echo ""
+          echo "🔗 Ingress 상태:"
+          kubectl get ingress -n nestjs-app
+
+          echo ""
+          echo "📝 최근 이벤트:"
+          kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -10
+
+          echo ""
+          echo "🏥 애플리케이션 로그 (마지막 20줄):"
+          kubectl logs -n nestjs-app deployment/nestjs-app --tail=20 || echo "로그를 가져올 수 없습니다"
+
+          echo ""
+          echo "✅ 배포 완료!"
+          echo "🌐 WebSocket: https://ws.pick-px.com"
