@@ -127,32 +127,58 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: nestjs-app
-        IMAGE_TAG: ${{ github.sha }}
+        IMAGE_TAG: ${{ steps.env.outputs.image_tag }}
+        NAMESPACE: ${{ steps.env.outputs.namespace }}
+        ENVIRONMENT: ${{ steps.env.outputs.environment }}
       run: |
-        echo "🚀 EKS 배포 시작..."
+        echo "🚀 EKS 배포 시작... (환경: $ENVIRONMENT, 네임스페이스: $NAMESPACE)"
         
-        # Create namespace
-        echo "📁 네임스페이스 생성..."
-        kubectl apply -f k8s/namespace.yaml
+        # Create namespace for staging if it's a PR
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "📁 스테이징 네임스페이스 생성..."
+          kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        else
+          echo "📁 프로덕션 네임스페이스 생성..."
+          kubectl apply -f k8s/namespace.yaml
+        fi
         
         # Create or update secrets
         echo "🔐 시크릿 생성/업데이트..."
         kubectl create secret generic app-secrets \
           --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
           --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
-          --namespace=nestjs-app \
+          --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+          --namespace=$NAMESPACE \
           --dry-run=client -o yaml | kubectl apply -f -
         
-        # Update deployment image
-        echo "🔄 배포 이미지 업데이트..."
-        sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s/deployment.yaml
+        # Copy and update deployment files for the environment
+        echo "🔄 배포 파일 준비..."
+        cp -r k8s k8s-temp
+        
+        # Update image in deployment
+        sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/deployment.yaml
+        
+        # Update namespace in all files
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          sed -i "s|namespace: nestjs-app|namespace: $NAMESPACE|g" k8s-temp/*.yaml
+          sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/deployment.yaml
+          sed -i "s|app: nestjs-app|app: nestjs-app-staging|g" k8s-temp/deployment.yaml
+          sed -i "s|name: nestjs-service|name: nestjs-service-staging|g" k8s-temp/service.yaml
+          sed -i "s|name: nestjs-hpa|name: nestjs-hpa-staging|g" k8s-temp/hpa.yaml
+          sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/hpa.yaml
+          sed -i "s|name: nestjs-ingress|name: nestjs-ingress-staging|g" k8s-temp/ingress.yaml
+        fi
         
         # Deploy application
         echo "📦 애플리케이션 배포..."
-        kubectl apply -f k8s/deployment.yaml
-        kubectl apply -f k8s/service.yaml
-        kubectl apply -f k8s/hpa.yaml
-        kubectl apply -f k8s/ingress.yaml
+        kubectl apply -f k8s-temp/deployment.yaml
+        kubectl apply -f k8s-temp/service.yaml
+        kubectl apply -f k8s-temp/hpa.yaml
+        
+        # Only apply ingress for production
+        if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+          kubectl apply -f k8s-temp/ingress.yaml
+        fi
         
         echo "✅ 리소스 배포 완료"
     
