@@ -26,8 +26,9 @@ export class CanvasGateway {
 
   constructor(
     private readonly canvasService: CanvasService,
-    @Inject('REDIS_PIXEL_CLIENT')
-    private readonly pixelRedis: Redis
+    // === 통합 Redis 클라이언트 ===
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis
   ) {}
 
   private getUserIdFromClient(client: Socket): number | null {
@@ -57,7 +58,7 @@ export class CanvasGateway {
       }
       
       // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
-      await this.pixelRedis.publish('pixel:updated', JSON.stringify({
+      await this.redis.publish('pixel:updated', JSON.stringify({
         canvasId: Number(pixel.canvas_id),
         x: pixel.x,
         y: pixel.y,

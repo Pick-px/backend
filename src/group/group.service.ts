@@ -21,8 +21,9 @@ export class GroupService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
-    @Inject('REDIS_CHAT_CLIENT')
-    private readonly chatRedis: Redis
+    // === 통합 Redis 클라이언트 ===
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis
   ) {}
 
   async getGroupIdByCanvasId(canvasId: number): Promise<number | null> {
@@ -35,7 +36,7 @@ export class GroupService {
     take: number
   ): Promise<Chat[]> {
     // Redis에서 최근 메시지만 조회 (최대 50개로 제한)
-    const redisChats = await this.chatRedis.lrange(`chat:${groupId}`, 0, Math.min(take, 50) - 1);
+    const redisChats = await this.redis.lrange(`chat:${groupId}`, 0, Math.min(take, 50) - 1);
     
     // Redis에 있는 메시지들 파싱
     const redisMessages = redisChats
@@ -90,11 +91,11 @@ export class GroupService {
       }));
       
       // Redis에 저장 (최대 50개, 12시간 TTL)
-      await this.chatRedis.del(chatKey);
+      await this.redis.del(chatKey);
       if (allPayloads.length > 0) {
-        await this.chatRedis.lpush(chatKey, ...allPayloads.map(p => JSON.stringify(p)));
-        await this.chatRedis.ltrim(chatKey, 0, 49);
-        await this.chatRedis.expire(chatKey, 12 * 60 * 60);
+        await this.redis.lpush(chatKey, ...allPayloads.map(p => JSON.stringify(p)));
+        await this.redis.ltrim(chatKey, 0, 49);
+        await this.redis.expire(chatKey, 12 * 60 * 60);
       }
     }
     
@@ -233,7 +234,7 @@ export class GroupService {
       
       // 그룹 삭제 시 Redis 채팅도 즉시 삭제
       try {
-        await this.chatRedis.del(`chat:${group_id}`);
+        await this.redis.del(`chat:${group_id}`);
         console.log(`[그룹 삭제] 그룹 ${group_id}의 Redis 채팅 삭제`);
       } catch (error) {
         console.error('[그룹 삭제] Redis 채팅 삭제 실패:', error);
@@ -361,7 +362,7 @@ export class GroupService {
   async cleanupInactiveGroupChats(): Promise<void> {
     try {
       // 모든 채팅 키 조회
-      const chatKeys = await this.chatRedis.keys('chat:*');
+      const chatKeys = await this.redis.keys('chat:*');
       
       if (chatKeys.length === 0) {
         return; // 정리할 게 없으면 조기 종료
@@ -379,7 +380,7 @@ export class GroupService {
         
         if (!group) {
           // 그룹이 삭제된 경우 Redis 채팅도 삭제 
-          await this.chatRedis.del(chatKey);
+          await this.redis.del(chatKey);
           console.log(`[정리] 삭제된 그룹 ${groupId}의 채팅 삭제`);
           cleanedCount++;
         }

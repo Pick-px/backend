@@ -3,7 +3,39 @@ import { Global, Module } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-// Redis 클라이언트 팩토리 함수들
+// === Redis 클라이언트 팩토리 함수 (통합 버전) ===
+const createRedisClient = (config: ConfigService): Redis => {
+  const host = config.get('REDIS_HOST') || 'localhost';
+  const port = config.get('REDIS_PORT') || 6379;
+  const password = config.get('REDIS_PASSWORD') || '';
+  const db = config.get('REDIS_DB') || 0;
+
+  const redis = new Redis({
+    host,
+    port,
+    password: password || undefined,
+    db,
+    lazyConnect: true,
+  });
+
+  // 연결 이벤트 리스너
+  redis.on('connect', () => {
+    console.log(`[Redis] 연결 성공: ${host}:${port}`);
+  });
+
+  redis.on('error', (error) => {
+    console.error(`[Redis] 연결 에러:`, error);
+  });
+
+  redis.on('close', () => {
+    console.log(`[Redis] 연결 종료`);
+  });
+
+  return redis;
+};
+
+// === 3개 Redis 분리 설정 ===
+/*
 const createRedisClient = (config: ConfigService, prefix: string): Redis => {
   const host = config.get(`${prefix}_HOST`) || config.get('REDIS_HOST') || 'localhost';
   const port = config.get(`${prefix}_PORT`) || config.get('REDIS_PORT') || 6379;
@@ -53,8 +85,102 @@ const createRedisCluster = (config: ConfigService, prefix: string): Redis => {
   console.warn(`[Redis ${prefix}] 클러스터 모드는 현재 지원되지 않음, 단일 Redis 사용`);
   return createRedisClient(config, prefix);
 };
+*/
 
-// Redis 모니터링 서비스
+// === Redis 모니터링 서비스 (통합 버전) ===
+class RedisMonitoringService {
+  private monitoringInterval: NodeJS.Timeout | null = null;
+
+  constructor(private readonly redis: Redis) {}
+
+  startMonitoring(): void {
+    this.monitoringInterval = setInterval(async () => {
+      await this.monitorRedisStatus();
+    }, 600000); // 10분마다 모니터링
+  }
+
+  async monitorRedisStatus(): Promise<void> {
+    try {
+      const info = await this.getRedisInfo();
+      console.log('[Redis 모니터링]', {
+        ...info,
+        timestamp: new Date().toISOString()
+      });
+
+      // 메모리 사용량 경고
+      if (info.memoryUsage > 80) {
+        console.warn('[Redis 모니터링] 메모리 사용량 경고:', `${info.memoryUsage}%`);
+      }
+
+    } catch (error) {
+      console.error('[Redis 모니터링] 에러:', error);
+    }
+  }
+
+  private async getRedisInfo(): Promise<any> {
+    try {
+      const info = await this.redis.info();
+      const lines = info.split('\r\n');
+      
+      let usedMemory = 0;
+      let maxMemory = 0;
+      let connectedClients = 0;
+      let keyspaceHits = 0;
+      let keyspaceMisses = 0;
+
+      for (const line of lines) {
+        if (line.startsWith('used_memory:')) {
+          usedMemory = parseInt(line.split(':')[1]);
+        } else if (line.startsWith('maxmemory:')) {
+          maxMemory = parseInt(line.split(':')[1]);
+        } else if (line.startsWith('connected_clients:')) {
+          connectedClients = parseInt(line.split(':')[1]);
+        } else if (line.startsWith('keyspace_hits:')) {
+          keyspaceHits = parseInt(line.split(':')[1]);
+        } else if (line.startsWith('keyspace_misses:')) {
+          keyspaceMisses = parseInt(line.split(':')[1]);
+        }
+      }
+
+      const memoryUsage = maxMemory > 0 ? Math.round((usedMemory / maxMemory) * 100) : 0;
+      const hitRate = (keyspaceHits + keyspaceMisses) > 0 
+        ? Math.round((keyspaceHits / (keyspaceHits + keyspaceMisses)) * 100) 
+        : 0;
+
+      return {
+        memoryUsage,
+        usedMemory: this.formatBytes(usedMemory),
+        maxMemory: this.formatBytes(maxMemory),
+        connectedClients,
+        hitRate: `${hitRate}%`,
+        status: 'connected'
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error.message
+      };
+    }
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  stopMonitoring(): void {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
+  }
+}
+
+// === 3개 Redis 모니터링 서비스 ===
+/*
 class RedisMonitoringService {
   private monitoringInterval: NodeJS.Timeout | null = null;
 
@@ -162,11 +288,30 @@ class RedisMonitoringService {
     }
   }
 }
+*/
 
 @Global()
 @Module({
   imports: [ConfigModule],
   providers: [
+    // === 통합 Redis 클라이언트 ===
+    {
+      provide: 'REDIS_CLIENT',
+      useFactory: (config: ConfigService) => createRedisClient(config),
+      inject: [ConfigService],
+    },
+    {
+      provide: 'REDIS_MONITORING',
+      useFactory: (redis: Redis) => {
+        const monitoring = new RedisMonitoringService(redis);
+        monitoring.startMonitoring();
+        return monitoring;
+      },
+      inject: ['REDIS_CLIENT'],
+    },
+
+    // === 3개 Redis 클라이언트 ===
+    /*
     {
       provide: 'REDIS_CLIENT',
       useFactory: (config: ConfigService) => createRedisClient(config, 'REDIS'),
@@ -191,7 +336,9 @@ class RedisMonitoringService {
       },
       inject: ['REDIS_PIXEL_CLIENT', 'REDIS_CHAT_CLIENT', 'REDIS_CLIENT'],
     },
+    */
   ],
-  exports: ['REDIS_CLIENT', 'REDIS_PIXEL_CLIENT', 'REDIS_CHAT_CLIENT', 'REDIS_MONITORING'],
+  exports: ['REDIS_CLIENT', 'REDIS_MONITORING'],
+  // exports: ['REDIS_CLIENT', 'REDIS_PIXEL_CLIENT', 'REDIS_CHAT_CLIENT', 'REDIS_MONITORING'], // 3개 버전
 })
 export class RedisModule {}

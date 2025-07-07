@@ -158,6 +158,34 @@ const forceFlushInterval = setInterval(async () => {
 
 // Redis 이벤트 리스너 설정
 async function setupRedisEventListeners() {
+  // 픽셀 변경 이벤트 구독 (기본 Redis 사용)
+  const pixelSubscriber = new Redis(redisConnection);
+  await pixelSubscriber.subscribe('pixel:updated');
+  
+  pixelSubscriber.on('message', async (channel, message) => {
+    try {
+      const { canvasId, x, y, color } = JSON.parse(message);
+      await addPixelToBatch(canvasId, x, y, color);
+    } catch (error) {
+      console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
+    }
+  });
+  
+  // 채팅 메시지 이벤트 구독 (기본 Redis 사용)
+  const chatSubscriber = new Redis(redisConnection);
+  await chatSubscriber.subscribe('chat:message');
+  
+  chatSubscriber.on('message', async (channel, message) => {
+    try {
+      const { groupId, chatData } = JSON.parse(message);
+      await addChatToBatch(groupId, chatData);
+    } catch (error) {
+      console.error('[Worker] 채팅 이벤트 처리 에러:', error);
+    }
+  });
+
+  // === 3개 Redis 분리 이벤트 리스너 ===
+  /*
   // 픽셀 변경 이벤트 구독 (픽셀 전용 Redis 사용)
   const pixelRedisConfig = {
     host: process.env.REDIS_PIXEL_HOST || 'redis-pixel',
@@ -195,6 +223,7 @@ async function setupRedisEventListeners() {
       console.error('[Worker] 채팅 이벤트 처리 에러:', error);
     }
   });
+  */
 }
 
 // 워커 및 리소스 종료 처리

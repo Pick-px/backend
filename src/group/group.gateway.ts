@@ -33,8 +33,9 @@ export class GroupGateway {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    @Inject('REDIS_CHAT_CLIENT')
-    private readonly chatRedis: Redis
+    // === 통합 Redis 클라이언트 ===
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis
   ) {}
 
   // 헬퍼: 인증 유저 ID 추출
@@ -125,16 +126,16 @@ export class GroupGateway {
       };
       // Redis에 저장 (12시간 TTL)
       const chatKey = `chat:${body.group_id}`;
-      await this.chatRedis.lpush(chatKey, JSON.stringify(chatPayload));
+      await this.redis.lpush(chatKey, JSON.stringify(chatPayload));
       
       // 채팅 리스트 크기 제한 (최대 50개)
-      await this.chatRedis.ltrim(chatKey, 0, 49);
+      await this.redis.ltrim(chatKey, 0, 49);
       
       // 12시간 TTL 설정
-      await this.chatRedis.expire(chatKey, 12 * 60 * 60);
+      await this.redis.expire(chatKey, 12 * 60 * 60);
       
       // 워커로 채팅 이벤트 발행 (DB 저장을 위해)
-      await this.chatRedis.publish('chat:message', JSON.stringify({
+      await this.redis.publish('chat:message', JSON.stringify({
         groupId: Number(body.group_id),
         chatData: chatPayload
       }));
