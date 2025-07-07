@@ -20,6 +20,20 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-northeast-2
     
+    - name: Install eksctl
+      run: |
+        # eksctl 설치
+        curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
+        eksctl version
+    
+    - name: Install kubectl
+      run: |
+        # kubectl 최신 버전 설치
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+        kubectl version --client
+    
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
@@ -37,7 +51,12 @@ jobs:
     
     - name: Update kubeconfig
       run: |
+        # EKS 클러스터 kubeconfig 설정
         aws eks update-kubeconfig --region ap-northeast-2 --name nestjs-cluster
+        
+        # 연결 테스트
+        kubectl cluster-info
+        kubectl get nodes
     
     - name: Install AWS Load Balancer Controller (if not exists)
       run: |
@@ -53,21 +72,23 @@ jobs:
             --policy-name AWSLoadBalancerControllerIAMPolicy \
             --policy-document file://iam_policy.json || true
           
-          # Create service account
+          # Create service account with eksctl
           eksctl create iamserviceaccount \
             --cluster=nestjs-cluster \
             --namespace=kube-system \
             --name=aws-load-balancer-controller \
             --role-name AmazonEKSLoadBalancerControllerRole \
             --attach-policy-arn=arn:aws:iam::863518449560:policy/AWSLoadBalancerControllerIAMPolicy \
-            --approve || true
+            --approve \
+            --region=ap-northeast-2 || true
           
-          # Install AWS Load Balancer Controller
+          # Install cert-manager
           kubectl apply \
             --validate=false \
             -f https://github.com/jetstack/cert-manager/releases/download/v1.13.0/cert-manager.yaml
           
           # Wait for cert-manager
+          echo "Waiting for cert-manager to be ready..."
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
           
           # Download and apply AWS Load Balancer Controller
@@ -76,6 +97,7 @@ jobs:
           kubectl apply -f v2_7_2_full.yaml
           
           # Wait for controller to be ready
+          echo "Waiting for AWS Load Balancer Controller to be ready..."
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=aws-load-balancer-controller -n kube-system --timeout=300s
         else
           echo "AWS Load Balancer Controller already exists"
@@ -108,8 +130,34 @@ jobs:
         
         # Check deployment status
         kubectl rollout status deployment/nestjs-app -n nestjs-app
+    
+    - name: Post-Deployment Verification
+      run: |
+        echo "🚀 ===== 배포 완료 확인 ====="
         
-        # Show ingress info
-        echo "Waiting for ALB to be ready..."
-        sleep 60
+        echo "📊 클러스터 노드 상태:"
+        kubectl get nodes -o wide
+        
+        echo ""
+        echo "🚀 Pod 상태:"
+        kubectl get pods -n nestjs-app -o wide
+        
+        echo ""
+        echo "🌐 서비스 상태:"
+        kubectl get svc -n nestjs-app
+        
+        echo ""
+        echo "🔗 Ingress 상태:"
         kubectl get ingress -n nestjs-app
+        
+        echo ""
+        echo "📝 최근 이벤트:"
+        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -10
+        
+        echo ""
+        echo "🏥 애플리케이션 로그 (마지막 20줄):"
+        kubectl logs -n nestjs-app deployment/nestjs-app --tail=20 || echo "로그를 가져올 수 없습니다"
+        
+        echo ""
+        echo "✅ 배포 완료!"
+        echo "🌐 WebSocket: https://ws.pick-px.com"
