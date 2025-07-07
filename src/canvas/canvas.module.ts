@@ -6,12 +6,13 @@ import { CanvasService } from './canvas.service';
 import { CanvasController } from './canvas.controller';
 import { CanvasGateway } from './canvas.gateway';
 import { Group } from '../group/entity/group.entity'; // 추가
+import { UserCanvas } from '../entity/UserCanvas.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Canvas, Pixel, Group]), 
+    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas]), 
     JwtModule.register({}),
     AuthModule,
     // ... 기타 모듈

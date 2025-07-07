@@ -14,6 +14,7 @@ import { pixelQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { User } from '../user/entity/user.entity';
+import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
 
 @Injectable()
@@ -25,6 +26,8 @@ export class CanvasService {
     private readonly pixelRepository: Repository<Pixel>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
+    @InjectRepository(UserCanvas)
+    private readonly userCanvasRepository: Repository<UserCanvas>,
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
     @InjectDataSource()
@@ -231,7 +234,7 @@ export class CanvasService {
     }
   }
 
-  // 픽셀 그리기 적용 함수
+  // 픽셀 그리기 적용 함수 (동시성 제어 포함)
   async applyDrawPixel({
     canvas_id,
     x,
@@ -245,11 +248,12 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
-    // 동시성 제어 여기서 해야할 듯?
+    // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
-    const ttl = 1000;
+    const ttl = 1000; // 락 유지 시간(ms)
 
+    // Redis NX 락 시도
     const is_locked = await this.redisClient.set(
       lockKey,
       lockUser,
@@ -259,30 +263,31 @@ export class CanvasService {
     );
 
     if (!is_locked) {
+      // 이미 다른 사용자가 락을 선점한 경우
       console.warn(`동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       return false;
     }
 
     try {
+      // 실제 픽셀 저장
       return await this.tryDrawPixel({ canvas_id, x, y, color });
     } finally {
+      // 락 해제
       await this.releaseRedisLock(lockKey, lockUser);
     }
   }
 
-  async releaseRedisLock(lockKey: string, lockUser: string) {
-    return await this.redisClient.eval(
-      `
-          if redis.call("get", KEYS[1]) == ARGV[1] then
-            return redis.call("del", KEYS[1])
-          else
-            return 0
-          end
-        `,
-      1,
-      lockKey,
-      lockUser
-    );
+  // Redis 락 해제 (분산락 안전 해제)
+  private async releaseRedisLock(lockKey: string, lockUser: string): Promise<void> {
+    // Lua 스크립트로 락 소유자만 해제
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
+    await this.redisClient.eval(script, 1, lockKey, lockUser);
   }
 
   // 캔버스 ID로 캔버스 정보 조회
@@ -332,19 +337,55 @@ export class CanvasService {
       return { success: false, message: '쿨다운 중', remaining: ttl };
     }
 
-    // 픽셀 그리기 적용
-    const result = await this.applyDrawPixel({
-      canvas_id,
-      x,
-      y,
-      color,
-      userId,
-    });
+    // 동시성 제어 포함 픽셀 그리기 적용
+    const result = await this.applyDrawPixel({ canvas_id, x, y, color, userId });
+    
+    // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
+    try {
+      await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+    } catch (error) {
+      console.error('사용자 캔버스 카운트 증가 실패:', error);
+      // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
+    }
+
     if (result) {
       await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };
     } else {
       return { success: false, message: '픽셀 저장 실패' };
+    }
+  }
+
+  // user_canvas 테이블의 count를 1씩 증가시키는 메서드
+  private async incrementUserCanvasCount(userId: number, canvasId: number): Promise<void> {
+    try {
+      // user_canvas 레코드가 있는지 확인
+      let userCanvas = await this.userCanvasRepository.findOne({
+        where: {
+          user: { id: userId },
+          canvas: { id: canvasId }
+        }
+      });
+
+      if (userCanvas) {
+        // 기존 레코드가 있으면 count를 1 증가
+        userCanvas.count += 1;
+        await this.userCanvasRepository.save(userCanvas);
+      } else {
+        // 레코드가 없으면 새로 생성 (count = 1)
+        userCanvas = this.userCanvasRepository.create({
+          user: { id: userId },
+          canvas: { id: canvasId },
+          count: 1,
+          joinedAt: new Date()
+        });
+        await this.userCanvasRepository.save(userCanvas);
+      }
+      
+      console.log(`사용자 ${userId}의 캔버스 ${canvasId} 카운트 증가: ${userCanvas.count}`);
+    } catch (error) {
+      console.error('user_canvas 카운트 증가 중 오류:', error);
+      throw error;
     }
   }
 
@@ -356,9 +397,7 @@ export class CanvasService {
   ): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
     const ttl = await this.redisClient.ttl(cooldownKey);
-    console.log(
-      `[쿨다운 조회] 사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`
-    );
+    console.log(`사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`);
     return ttl > 0 ? ttl : 0; // 초
   }
 }

@@ -48,7 +48,6 @@ export class GroupService {
         userId: chat.user.id,
         message: chat.message,
         createdAt: new Date(chat.created_at),
-        updatedAt: new Date(chat.created_at),
         user: {
           id: chat.user.id,
           userName: chat.user.user_name
