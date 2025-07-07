@@ -11,20 +11,11 @@ metadata:
     alb.ingress.kubernetes.io/ssl-redirect: '443'
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:863518449560:certificate/b9aec76a-3962-418e-a03a-4827ef59dd4c
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
+    # 기존 ALB와 동일한 이름으로 생성되도록 설정
+    alb.ingress.kubernetes.io/load-balancer-name: pick-px-alb-eks
 spec:
   rules:
-  # Main domain pointing to EKS
-  - host: pick-px.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: nestjs-service
-            port:
-              number: 80
-  # WebSocket domain also pointing to EKS
+  # WebSocket 도메인 (직접 접근)
   - host: ws.pick-px.com
     http:
       paths:
