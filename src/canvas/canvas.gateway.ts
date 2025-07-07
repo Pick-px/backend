@@ -1,50 +1,124 @@
 import {
-    WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket,
-  } from '@nestjs/websockets';
-  import { Server, Socket } from 'socket.io';
-  import { CanvasService } from './canvas.service';
-  
-  @WebSocketGateway({ 
-    cors: {
-    origin: 'http://localhost:5173',
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { CanvasService } from './canvas.service';
+import Redis from 'ioredis';
+import { Inject } from '@nestjs/common';
+import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
+
+interface SocketUser {
+  userId?: number;
+  id?: number;
+  [key: string]: any;
+}
+
+@WebSocketGateway({
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'https://ws.pick-px.com',
+      'https://pick-px.com',
+    ],
     credentials: true,
-    },
-  })
-  export class CanvasGateway {
-    @WebSocketServer()
-    server: Server;
-  
-    constructor(private readonly canvasService: CanvasService) {}
-  
-    // 1. 클라이언트가 소켓 연결 시
-    handleConnection(client: Socket) {
-      console.log('클라이언트 연결됨:', client.id);
+  },
+})
+export class CanvasGateway {
+  @WebSocketServer()
+  server: Server;
+
+  constructor(
+    private readonly canvasService: CanvasService,
+    // === 통합 Redis 클라이언트 ===
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis
+  ) {}
+
+  private getUserIdFromClient(client: Socket): number | null {
+    const user = (client as any).user as SocketUser | undefined;
+    if (!user || (!user.userId && !user.id)) return null;
+    return Number(user.userId || user.id);
+  }
+
+  // 픽셀 그리기 요청
+  @SubscribeMessage('draw_pixel')
+  async handleDrawPixel(
+    @MessageBody()
+    pixel: { canvas_id: string; x: number; y: number; color: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    const userId = this.getUserIdFromClient(client);
+    if (!userId) {
+      client.emit('auth_error', { message: '인증 필요' });
+      return;
     }
-  
-    // 2. 클라이언트 연결 해제 시
-    handleDisconnect(client: Socket) {
-      console.log('클라이언트 연결 해제:', client.id);
-    }
-  
-    // 3. 초기 캔버스 데이터 요청
-    @SubscribeMessage('get-canvas')
-    handleGetCanvas(@ConnectedSocket() client: Socket) {
-      const canvasData = this.canvasService.getAllPixels();
-      // 요청한 클라이언트에게만 전송
-      client.emit('canvas-data', canvasData);
-    }
-  
-    // 4. 픽셀 그리기 요청
-    @SubscribeMessage('draw-pixel')
-    handleDrawPixel(
-      @MessageBody() pixelData: { x: number; y: number; color: string },
-      @ConnectedSocket() client: Socket,
-    ) {
-      // 1. 유효성/동시성 검사 (선점 로직)
-      const isValid = this.canvasService.tryDrawPixel(pixelData);
-      if (!isValid) return; // 이미 선점된 픽셀이면 무시
-  
-      // 2. 모든 클라이언트에게 브로드캐스트 (자기 자신 포함)
-      this.server.emit('pixel-update', pixelData);
+    try {
+      const result: DrawPixelResponse =
+        await this.canvasService.applyDrawPixelWithCooldown({
+          ...pixel,
+          userId,
+        });
+      if (!result.success) {
+        console.log(
+          `[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`
+        );
+        client.emit('pixel_error', {
+          message: result.message,
+          remaining: result.remaining,
+        });
+        return;
+      }
+
+      // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
+      await this.redis.publish(
+        'pixel:updated',
+        JSON.stringify({
+          canvasId: Number(pixel.canvas_id),
+          x: pixel.x,
+          y: pixel.y,
+          color: pixel.color,
+        })
+      );
+
+      // canvas_id 방에만 브로드캐스트
+      this.server.to(pixel.canvas_id).emit('pixel_update', {
+        x: pixel.x,
+        y: pixel.y,
+        color: pixel.color,
+      });
+
+      console.log(
+        `[Gateway] 픽셀 그리기 완료: canvas=${pixel.canvas_id}, 위치=(${pixel.x},${pixel.y}), 색상=${pixel.color}`
+      );
+    } catch (error) {
+      console.error('[Gateway] 픽셀 그리기 에러:', error);
+      client.emit('pixel_error', { message: '픽셀 그리기 실패' });
     }
   }
+
+  @SubscribeMessage('join_canvas')
+  async handleJoinCanvas(
+    @MessageBody() data: { canvas_id: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    await client.join(data.canvas_id);
+    // 쿨다운 정보 자동 푸시
+    const userId = this.getUserIdFromClient(client);
+    if (userId && data.canvas_id) {
+      try {
+        const remaining = await this.canvasService.getCooldownRemaining(
+          userId,
+          data.canvas_id
+        );
+        client.emit('cooldown_info', { cooldown: remaining > 0, remaining });
+      } catch (error) {
+        // 쿨다운 정보 조회 실패 시 무시
+        console.log(error);
+      }
+    }
+  }
+}

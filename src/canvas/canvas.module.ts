@@ -1,32 +1,24 @@
 import { Module } from '@nestjs/common';
-import { CanvasGateway } from './canvas.gateway';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Canvas } from './entity/canvas.entity';
+import { Pixel } from '../pixel/entity/pixel.entity';
 import { CanvasService } from './canvas.service';
-import { SubscribeMessage, ConnectedSocket, WebSocketServer } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { MessageBody } from '@nestjs/websockets';
+import { CanvasController } from './canvas.controller';
+import { CanvasGateway } from './canvas.gateway';
+import { Group } from '../group/entity/group.entity'; // 추가
+import { UserCanvas } from '../entity/UserCanvas.entity';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  providers: [CanvasGateway, CanvasService],
+  imports: [
+    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas]), 
+    JwtModule.register({}),
+    AuthModule,
+    // ... 기타 모듈
+  ],
+  controllers: [CanvasController],
+  providers: [CanvasService, CanvasGateway],
+  exports: [CanvasService],
 })
-export class CanvasModule {
-    @WebSocketServer()
-    server: Server;
-  @SubscribeMessage('join')
-  handleJoin(
-    @MessageBody() data: { canvas_id: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.join(data.canvas_id);
-  }
-
-  @SubscribeMessage('chat')
-  handleChat(
-    @MessageBody() body: { canvas_id: string; message: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    this.server.to(body.canvas_id).emit('chat', {
-      user: client.id,
-      message: body.message,
-    });
-  }
-}
+export class CanvasModule {}

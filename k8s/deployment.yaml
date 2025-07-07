@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nestjs-app
+  namespace: nestjs-app
+  labels:
+    app: nestjs-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nestjs-app
+  template:
+    metadata:
+      labels:
+        app: nestjs-app
+    spec:
+      containers:
+        - name: nestjs-app
+          image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-url
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '250m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
