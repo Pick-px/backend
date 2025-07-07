@@ -46,19 +46,17 @@ export class CanvasService {
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
-      
+
       // Redis Hash에 픽셀 저장
       await this.redisClient.hset(hashKey, field, color);
-      
+
       // Hash 전체에 TTL 설정 (3일)
       await this.redisClient.expire(hashKey, 3 * 24 * 60 * 60);
-      
+
       // 워커를 위한 dirty_pixels set에 추가 (DB flush용)
       await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
-      
-      console.log(
-        `Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color}`
-      );
+
+      console.log(`Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color}`);
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
@@ -239,13 +237,52 @@ export class CanvasService {
     x,
     y,
     color,
+    userId,
   }: {
     canvas_id: string;
     x: number;
     y: number;
     color: string;
+    userId: number;
   }): Promise<boolean> {
-    return await this.tryDrawPixel({ canvas_id, x, y, color });
+    // 동시성 제어 여기서 해야할 듯?
+    const lockKey = `lock:${canvas_id}:${x}:${y}`;
+    const lockUser = userId.toString();
+    const ttl = 1000;
+
+    const is_locked = await this.redisClient.set(
+      lockKey,
+      lockUser,
+      'PX',
+      ttl,
+      'NX'
+    );
+
+    if (!is_locked) {
+      console.warn(`동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
+      return false;
+    }
+
+    try {
+      return await this.tryDrawPixel({ canvas_id, x, y, color });
+    } finally {
+      await this.releaseRedisLock(lockKey, lockUser);
+    }
+  }
+
+  async releaseRedisLock(lockKey: string, lockUser: string) {
+    return await this.redisClient.eval(
+      `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+          else
+            return 0
+          end
+        `,
+      1,
+      lockKey,
+      lockUser
+    );
   }
 
   // 캔버스 ID로 캔버스 정보 조회
@@ -296,7 +333,13 @@ export class CanvasService {
     }
 
     // 픽셀 그리기 적용
-    const result = await this.applyDrawPixel({ canvas_id, x, y, color });
+    const result = await this.applyDrawPixel({
+      canvas_id,
+      x,
+      y,
+      color,
+      userId,
+    });
     if (result) {
       await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };

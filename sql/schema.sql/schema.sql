@@ -18,15 +18,13 @@ create table if not exists canvases
 (
     id         serial,
     title      varchar(50) not null,
-    type       text        not null,
+    type       varchar(50)        not null,
     created_at timestamp   not null,
     ended_at   timestamp   not null,
     size_x     integer     not null,
     size_y     integer     not null,
     is_active boolean default false not null,
-    primary key (id),
-    constraint canvases_type_check
-        check (type = ANY (ARRAY ['public'::text, 'event'::text]))
+    primary key (id)
 );
 
 alter table canvases
