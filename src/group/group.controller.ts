@@ -121,16 +121,11 @@ export class GroupController {
           HttpStatus.UNAUTHORIZED
         );
       }
-      console.log('user', user_id, 'open chat in canvas', canvasId);
-      // 해당 캔버스에서 유저가 참여중인 그룹 리스트만 조회
-      const groups = await this.groupService.findUserGroupsByCanvasId(
-        user.id,
-        Number(canvasId)
-      );
       // 해당 캔버스의 전체 채팅방만 조회
       const defaultGroup = await this.groupService.findDefaultGroupByCanvasId(
         Number(canvasId)
       );
+
       if (!defaultGroup) {
         throw new HttpException(
           { success: false, error: 'Default group not found' },
@@ -146,10 +141,16 @@ export class GroupController {
       if (!isMember) {
         await this.groupService.joinGroup(defaultGroupId, user.id, canvasIdNum);
       }
+
       // 해당 그룹의 최신 메시지 50개
       const messages = await this.groupService.getRecentChatsByGroupId(
         defaultGroupId,
         50
+      );
+      // 해당 캔버스에서 유저가 참여중인 그룹 리스트만 조회
+      const groups = await this.groupService.findUserGroupsByCanvasId(
+        user.id,
+        Number(canvasId)
       );
       return {
         success: true,

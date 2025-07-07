@@ -156,7 +156,6 @@ export class CanvasController {
       return {
         success: false,
         message: 'Internal server error',
-        error: err?.message,
       };
     }
   }
