@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
-import { RedisModule } from './redis/redis.module'; // 추가된 부분
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { RedisModule } from './redis/redis.module';
 import { CanvasModule } from './canvas/canvas.module';
 import { DatabaseModule } from './database/database.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,18 +21,43 @@ import { AppGateway } from './app.gateway';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // 전역 모듈로 설정 (옵션)
-      envFilePath: '.env', // 기본값이지만 명시 가능
+      isGlobal: true,
+      envFilePath: '.env',
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'postgres',
-      port: 5432,
-      username: 'pixel_user',
-      password: 'teamgmgdogs',
-      database: 'pick_px',
-      autoLoadEntities: true,
-      entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+
+        if (databaseUrl) {
+          // 프로덕션: DATABASE_URL 사용
+          return {
+            type: 'postgres',
+            url: databaseUrl,
+            autoLoadEntities: true,
+            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            synchronize: false, // 프로덕션에서는 false
+            ssl:
+              process.env.NODE_ENV === 'production'
+                ? { rejectUnauthorized: false }
+                : false,
+          };
+        } else {
+          // 로컬 개발: 기존 설정 사용
+          return {
+            type: 'postgres',
+            host: 'postgres',
+            port: 5432,
+            username: 'pixel_user',
+            password: 'teamgmgdogs',
+            database: 'pick_px',
+            autoLoadEntities: true,
+            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            synchronize: true, // 개발에서만 true
+          };
+        }
+      },
+      inject: [ConfigService],
     }),
     RedisModule,
     CanvasModule,

@@ -3,20 +3,64 @@ import { Global, Module } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-// === Redis 클라이언트 팩토리 함수 (통합 버전) ===
-const createRedisClient = (config: ConfigService): Redis => {
-  const host = config.get('REDIS_HOST') || 'localhost';
-  const port = config.get('REDIS_PORT') || 6379;
-  const password = config.get('REDIS_PASSWORD') || '';
-  const db = config.get('REDIS_DB') || 0;
+/*
+useFactory: (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
 
-  const redis = new Redis({
-    host,
-    port,
-    password: password || undefined,
-    db,
-    lazyConnect: true,
-  });
+        let redis: Redis;
+
+        if (redisUrl) {
+          // 프로덕션: REDIS_URL 사용 (TLS 지원)
+          redis = new Redis(redisUrl, {
+            tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+            retryDelayOnFailover: 100,
+            maxRetriesPerRequest: 3,
+          });
+        } else {
+          // 로컬 개발: 기존 설정 사용
+          redis = new Redis({
+            host: configService.get('REDIS_HOST') || 'redis',
+            port: configService.get<number>('REDIS_PORT') || 6379,
+            password: configService.get('REDIS_PASSWORD') || undefined,
+          });
+        }
+
+     
+
+   
+  
+
+        return redis;
+      },
+*/
+
+// === Redis 클라이언트 팩토리 함수 (통합 버전) ===
+const createRedisClient = (configService: ConfigService): Redis => {
+  const host = configService.get<string>('REDIS_HOST') || 'redis';
+  const port = configService.get<number>('REDIS_PORT') || 6379;
+  const password = configService.get<string>('REDIS_PASSWORD') || '';
+  const db = configService.get<number>('REDIS_DB') || 0;
+  const redisUrl = configService.get<string>('REDIS_URL');
+
+  let redis: Redis;
+
+  if (redisUrl) {
+    // 프로덕션: REDIS_URL 사용 (TLS 지원)
+    redis = new Redis(redisUrl, {
+      tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+      retryDelayOnFailover: 100,
+      maxRetriesPerRequest: 3,
+    });
+  } else {
+    // 로컬 개발: 기존 설정 사용
+    redis = new Redis({
+      host,
+      port,
+      password: password || undefined,
+      db,
+      lazyConnect: true,
+    });
+  }
 
   // 연결 이벤트 리스너
   redis.on('connect', () => {
