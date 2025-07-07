@@ -9,6 +9,8 @@ import {
   UseGuards,
   ForbiddenException,
   HttpCode,
+  HttpException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -65,8 +67,8 @@ export class UserController {
       });
       res.status(200);
     } catch (err) {
-      //   const message: string = err.message;
-      res.send(404);
+      if (err instanceof HttpException) throw err;
+      throw new NotFoundException('OAuth 실패');
     }
   }
 
@@ -80,6 +82,7 @@ export class UserController {
     try {
       return await this.userService.getUserInfo(userId);
     } catch (err) {
+      if (err instanceof HttpException) throw err;
       throw new ForbiddenException('마이페이지 데이터 불러오기 실패');
     }
   }
@@ -102,6 +105,7 @@ export class UserController {
         path: '/',
       });
     } catch (err) {
+      if (err instanceof HttpException) throw err;
       throw new ForbiddenException('로그아웃 실패입니다.');
     }
   }

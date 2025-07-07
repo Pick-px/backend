@@ -162,14 +162,8 @@ export class CanvasController {
   }
 
   @ApiOperation({
-    summary: '특정 캔버스의 모든 픽셀 데이터 조회',
-    description:
-      'canvas_id로 해당 캔버스의 전체 픽셀 데이터를 압축하여 반환합니다.',
-  })
-  @ApiQuery({
-    name: 'canvas_id',
-    required: true,
-    description: '조회할 캔버스 ID',
+    summary: '캔버스 리스트',
+    description: 'status(is_active)에 따른 캔버스 리스트 반환',
   })
   @Get('list')
   async getCanvasList(@Query('status') status: string) {

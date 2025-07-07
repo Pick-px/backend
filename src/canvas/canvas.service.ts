@@ -31,7 +31,7 @@ export class CanvasService {
     private readonly dataSource: DataSource
   ) {}
 
-  // 픽셀 저장 로직 (Redis만 사용)
+  // 픽셀 저장 로직 (Redis Hash 사용)
   async tryDrawPixel({
     canvas_id,
     x,
@@ -44,13 +44,19 @@ export class CanvasService {
     color: string;
   }): Promise<boolean> {
     try {
-      // Store pixel in Redis hash
-      await this.redisClient.hset(`canvas:${canvas_id}`, `${x}:${y}`, color);
-      // Optionally, if you want to keep the dirty_pixels logic for the worker, you can comment out or remove the following line:
+      const hashKey = `canvas:${canvas_id}`;
+      const field = `${x}:${y}`;
+
+      // Redis Hash에 픽셀 저장
+      await this.redisClient.hset(hashKey, field, color);
+
+      // Hash 전체에 TTL 설정 (3일)
+      await this.redisClient.expire(hashKey, 3 * 24 * 60 * 60);
+
+      // 워커를 위한 dirty_pixels set에 추가 (DB flush용)
       await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
-      console.log(
-        `Redis: 픽셀 저장 성공: canvas:${canvas_id} ${x}:${y} = ${color}`
-      );
+
+      console.log(`Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color}`);
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
