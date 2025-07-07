@@ -21,94 +21,220 @@ type PixelGenerationJobData = {
 let worker: Worker<PixelGenerationJobData>;
 let redis: Redis;
 
-// 픽셀 dirty flush
-async function flushDirtyPixels() {
+// 배치 처리를 위한 큐 (전체 통합 - 대용량 처리용)
+const pixelBatchQueue: Set<string> = new Set();
+const chatBatchQueue: any[] = [];
+
+// 배치 처리 설정 (대용량 최적화)
+const PIXEL_BATCH_SIZE = 200;   // 픽셀 배치 크기
+const CHAT_BATCH_SIZE = 100;     // 채팅 배치 크기
+const BATCH_TIMEOUT_MS = 10000;   // 10초
+
+
+// 픽셀 변경사항을 배치에 추가 (전체 통합 + 중복 제거)
+async function addPixelToBatch(canvasId: number, x: number, y: number, color: string) {
+  // 기존 같은 픽셀 제거 (최신 색상만 유지)
+  const pixelKey = `${canvasId}:${x}:${y}`;
+  for (const existingPixel of pixelBatchQueue) {
+    if (existingPixel.startsWith(pixelKey + ':')) {
+      pixelBatchQueue.delete(existingPixel);
+      break;
+    }
+  }
+  
+  const pixelData = `${pixelKey}:${color}`;
+  pixelBatchQueue.add(pixelData);
+  
+  // 배치 크기 도달 시 즉시 flush
+  if (pixelBatchQueue.size >= PIXEL_BATCH_SIZE) {
+    console.log(`[Worker] 픽셀 배치 크기 도달으로 즉시 flush: 개수=${pixelBatchQueue.size}`);
+    await flushPixelBatch();
+  }
+}
+
+// 채팅 메시지를 배치에 추가 (전체 통합)
+async function addChatToBatch(groupId: number, chatData: any) {
+  chatBatchQueue.push({ groupId, chatData });
+  
+  // 배치 크기 도달 시 즉시 flush
+  if (chatBatchQueue.length >= CHAT_BATCH_SIZE) {
+    console.log(`[Worker] 채팅 배치 크기 도달으로 즉시 flush: 개수=${chatBatchQueue.length}`);
+    await flushChatBatch();
+  }
+}
+
+// 픽셀 배치 flush (전체 통합)
+async function flushPixelBatch(isForceFlush: boolean = false) {
+  if (pixelBatchQueue.size === 0) return;
+  
   try {
     const pixelRepo = AppDataSource.getRepository(Pixel);
-    const canvasRepo = AppDataSource.getRepository(Canvas);
-    const canvases = await canvasRepo.find();
-    for (const canvas of canvases) {
-      const dirtyKey = `dirty_pixels:${canvas.id}`;
-      const dirtyPixels = await redis.smembers(dirtyKey);
-      if (dirtyPixels.length === 0) continue;
-      console.log(
-        `[Worker] Flushing ${dirtyPixels.length} dirty pixels for canvas ${canvas.id}`
-      );
-      for (const xy of dirtyPixels) {
-        const [x, y] = xy.split(':');
-        const color = await redis.get(`${canvas.id}:${x}:${y}`);
-        if (!color) continue;
-        const pixel = await pixelRepo.findOne({
-          where: { canvasId: canvas.id, x: Number(x), y: Number(y) },
+    const pixelsToUpdate: Pixel[] = [];
+    
+    // 캔버스별로 그룹화
+    const canvasGroups = new Map<number, Array<{x: number, y: number, color: string}>>();
+    
+    for (const pixelData of pixelBatchQueue) {
+      const [canvasId, x, y, color] = pixelData.split(':');
+      if (!canvasGroups.has(Number(canvasId))) {
+        canvasGroups.set(Number(canvasId), []);
+      }
+      canvasGroups.get(Number(canvasId))!.push({
+        x: Number(x),
+        y: Number(y),
+        color
+      });
+    }
+    
+    // 각 캔버스별로 업데이트
+    for (const [canvasId, pixels] of canvasGroups) {
+      for (const { x, y, color } of pixels) {
+        const existingPixel = await pixelRepo.findOne({
+          where: { canvasId, x, y }
         });
-        if (pixel) {
-          pixel.color = color;
-          await pixelRepo.save(pixel);
-        } else {
-          await pixelRepo.save({
-            canvasId: canvas.id,
-            x: Number(x),
-            y: Number(y),
-            color,
-          });
+        
+        if (existingPixel) {
+          existingPixel.color = color;
+          pixelsToUpdate.push(existingPixel);
         }
       }
-      await redis.del(dirtyKey); // flush 후 dirty set 비우기
     }
-    console.log('[Worker] Redis→DB dirty 픽셀 flush 완료');
+    
+    // 배치 업데이트만 처리
+    if (pixelsToUpdate.length > 0) {
+      await pixelRepo.save(pixelsToUpdate);
+    }
+    
+    const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
+    console.log(`[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}, 업데이트=${pixelsToUpdate.length}`);
+    pixelBatchQueue.clear();
   } catch (error) {
-    console.error('[Worker] Redis→DB flush 에러:', error);
+    console.error(`[Worker] 픽셀 배치 flush 에러:`, error);
   }
 }
 
-// 채팅 flush
-async function flushChatQueue() {
+// 채팅 배치 flush (전체 통합)
+async function flushChatBatch(isForceFlush: boolean = false) {
+  if (chatBatchQueue.length === 0) return;
+  
   try {
-    const groupRepo = AppDataSource.getRepository(Group);
     const chatRepo = AppDataSource.getRepository(Chat);
-    const groups = await groupRepo.find({ select: ['id'] });
-    for (const group of groups) {
-      const key = `chat:${group.id}`;
-      while (true) {
-        const msg = await redis.rpop(key);
-        if (!msg) break;
-        try {
-          const chat = JSON.parse(msg);
-          await chatRepo.save({
-            groupId: group.id,
-            userId: chat.user.id,
-            message: chat.message,
-            createdAt: chat.created_at,
-            updatedAt: chat.created_at,
-          });
-        } catch (e) {
-          console.error('채팅 flush 중 오류:', e);
-        }
-      }
-    }
-    console.log('[Worker] Redis→DB 채팅 flush 완료');
-  } catch (e) {
-    console.error('[Worker] 채팅 flush 에러:', e);
+    const chatsToInsert = chatBatchQueue.map(({ groupId, chatData }) => ({
+      groupId,
+      userId: chatData.user.id,
+      message: chatData.message,
+      createdAt: chatData.created_at,
+      updatedAt: chatData.created_at
+    }));
+    
+    await chatRepo.save(chatsToInsert);
+    const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
+    console.log(`[Worker] 채팅 ${flushType} 완료: 개수=${chatBatchQueue.length}`);
+    chatBatchQueue.length = 0; // 배열 비우기
+  } catch (error) {
+    console.error(`[Worker] 채팅 배치 flush 에러:`, error);
   }
 }
 
-// 픽셀/채팅 flush 순차 실행
-const FLUSH_PIXELS_MS = 10000; // 픽셀 flush 주기
-const FLUSH_CHAT_MS = 1000; // 채팅 flush 주기
+// 주기적 강제 flush (안전장치)
+const forceFlushInterval = setInterval(async () => {
+  let totalPixelFlushCount = 0;
+  let totalChatFlushCount = 0;
+  
+  if (pixelBatchQueue.size > 0) {
+    totalPixelFlushCount = pixelBatchQueue.size;
+    await flushPixelBatch(true);
+  }
+  
+  if (chatBatchQueue.length > 0) {
+    totalChatFlushCount = chatBatchQueue.length;
+    await flushChatBatch(true);
+  }
+  
+  if (totalPixelFlushCount > 0 || totalChatFlushCount > 0) {
+    console.log(`[Worker] 강제 flush 완료: 픽셀=${totalPixelFlushCount}개, 채팅=${totalChatFlushCount}개`);
+  }
+}, BATCH_TIMEOUT_MS);
 
-const flushDirtyPixelsInterval = setInterval(async () => {
-  await flushDirtyPixels();
-}, FLUSH_PIXELS_MS);
+// Redis 이벤트 리스너 설정
+async function setupRedisEventListeners() {
+  // 픽셀 변경 이벤트 구독 (기본 Redis 사용)
+  const pixelSubscriber = new Redis(redisConnection);
+  await pixelSubscriber.subscribe('pixel:updated');
+  
+  pixelSubscriber.on('message', async (channel, message) => {
+    try {
+      const { canvasId, x, y, color } = JSON.parse(message);
+      await addPixelToBatch(canvasId, x, y, color);
+    } catch (error) {
+      console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
+    }
+  });
+  
+  // 채팅 메시지 이벤트 구독 (기본 Redis 사용)
+  const chatSubscriber = new Redis(redisConnection);
+  await chatSubscriber.subscribe('chat:message');
+  
+  chatSubscriber.on('message', async (channel, message) => {
+    try {
+      const { groupId, chatData } = JSON.parse(message);
+      await addChatToBatch(groupId, chatData);
+    } catch (error) {
+      console.error('[Worker] 채팅 이벤트 처리 에러:', error);
+    }
+  });
 
-const flushChatQueueInterval = setInterval(async () => {
-  await flushChatQueue();
-}, FLUSH_CHAT_MS);
+  // === 3개 Redis 분리 이벤트 리스너 ===
+  /*
+  // 픽셀 변경 이벤트 구독 (픽셀 전용 Redis 사용)
+  const pixelRedisConfig = {
+    host: process.env.REDIS_PIXEL_HOST || 'redis-pixel',
+    port: parseInt(process.env.REDIS_PIXEL_PORT || '6379', 10),
+    password: process.env.REDIS_PIXEL_PASSWORD || undefined,
+    lazyConnect: true,
+  };
+  const pixelSubscriber = new Redis(pixelRedisConfig);
+  await pixelSubscriber.subscribe('pixel:updated');
+  
+  pixelSubscriber.on('message', async (channel, message) => {
+    try {
+      const { canvasId, x, y, color } = JSON.parse(message);
+      await addPixelToBatch(canvasId, x, y, color);
+    } catch (error) {
+      console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
+    }
+  });
+  
+  // 채팅 메시지 이벤트 구독 (채팅 전용 Redis 사용)
+  const chatRedisConfig = {
+    host: process.env.REDIS_CHAT_HOST || 'redis-chat',
+    port: parseInt(process.env.REDIS_CHAT_PORT || '6379', 10),
+    password: process.env.REDIS_CHAT_PASSWORD || undefined,
+    lazyConnect: true,
+  };
+  const chatSubscriber = new Redis(chatRedisConfig);
+  await chatSubscriber.subscribe('chat:message');
+  
+  chatSubscriber.on('message', async (channel, message) => {
+    try {
+      const { groupId, chatData } = JSON.parse(message);
+      await addChatToBatch(groupId, chatData);
+    } catch (error) {
+      console.error('[Worker] 채팅 이벤트 처리 에러:', error);
+    }
+  });
+  */
+}
 
 // 워커 및 리소스 종료 처리
 async function gracefulShutdown() {
   console.log('[Worker] 종료 신호 수신, 정리 작업 시작...');
-  clearInterval(flushDirtyPixelsInterval);
-  clearInterval(flushChatQueueInterval);
+  clearInterval(forceFlushInterval);
+  
+  // 남은 배치들 강제 flush
+  await flushPixelBatch();
+  await flushChatBatch();
+  
   if (worker) await worker.close();
   if (redis) await redis.quit();
   if (AppDataSource.isInitialized) await AppDataSource.destroy();
@@ -126,6 +252,11 @@ void (async () => {
     console.log('[Worker] Redis 연결 성공');
     await AppDataSource.initialize();
     console.log('[Worker] DataSource 초기화 완료');
+    
+    // Redis 이벤트 리스너 설정
+    await setupRedisEventListeners();
+    console.log('[Worker] Redis 이벤트 리스너 설정 완료');
+    
     worker = new Worker<PixelGenerationJobData>(
       'pixel-generation',
       async (job) => {
@@ -195,5 +326,22 @@ void (async () => {
     process.exit(1);
   }
 })();
+
+// 이벤트 발행 헬퍼 함수들
+export async function publishPixelUpdate(canvasId: number, x: number, y: number, color: string) {
+  try {
+    await redis.publish('pixel:updated', JSON.stringify({ canvasId, x, y, color }));
+  } catch (error) {
+    console.error('[Worker] 픽셀 이벤트 발행 에러:', error);
+  }
+}
+
+export async function publishChatMessage(groupId: number, chatData: any) {
+  try {
+    await redis.publish('chat:message', JSON.stringify({ groupId, chatData }));
+  } catch (error) {
+    console.error('[Worker] 채팅 이벤트 발행 에러:', error);
+  }
+}
 
 export { worker };

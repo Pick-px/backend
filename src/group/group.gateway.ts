@@ -8,6 +8,7 @@ import { ChatMessageDto } from './dto/chat-message.dto';
 import Redis from 'ioredis';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { Group } from './entity/group.entity';
+import { Inject } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
@@ -23,8 +24,6 @@ export class GroupGateway {
   @WebSocketServer()
   server: Server;
 
-  private redisClient: Redis;
-
   constructor(
     @InjectRepository(Chat)
     private readonly chatRepository: Repository<Chat>,
@@ -34,9 +33,10 @@ export class GroupGateway {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-  ) {
-    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
-  }
+    // === 통합 Redis 클라이언트 ===
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis
+  ) {}
 
   // 헬퍼: 인증 유저 ID 추출
   private getUserIdFromClient(client: Socket): number | null {
@@ -61,13 +61,13 @@ export class GroupGateway {
   ) {
     const userId = this.getUserIdFromClient(client);
     if (!userId) {
-      client.emit('auth-error', { message: '인증 정보가 올바르지 않습니다.' });
+      client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
       return;
     }
     // 그룹 참여 여부 확인
     const isMember = await this.checkGroupMembership(userId, Number(data.group_id));
     if (!isMember) {
-      client.emit('chat-error', {
+      client.emit('chat_error', {
         message: '이 채팅방에 참여할 권한이 없습니다.',
       });
       return;
@@ -104,13 +104,13 @@ export class GroupGateway {
     try {
       const userId = this.getUserIdFromClient(client);
       if (!userId) {
-        client.emit('auth-error', { message: '인증 정보가 올바르지 않습니다.' });
+        client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
         return;
       }
       // 그룹 참여 여부 확인
       const isMember = await this.checkGroupMembership(userId, Number(body.group_id));
       if (!isMember) {
-        client.emit('chat-error', {
+        client.emit('chat_error', {
           message: '이 채팅방에 참여할 권한이 없습니다.',
         });
         return;
@@ -124,14 +124,26 @@ export class GroupGateway {
         message: body.message,
         created_at: now.toISOString(),
       };
-      await this.redisClient.lpush(
-        `chat:${body.group_id}`,
-        JSON.stringify(chatPayload)
-      );
+      // Redis에 저장 (12시간 TTL)
+      const chatKey = `chat:${body.group_id}`;
+      await this.redis.lpush(chatKey, JSON.stringify(chatPayload));
+      
+      // 채팅 리스트 크기 제한 (최대 50개)
+      await this.redis.ltrim(chatKey, 0, 49);
+      
+      // 12시간 TTL 설정
+      await this.redis.expire(chatKey, 12 * 60 * 60);
+      
+      // 워커로 채팅 이벤트 발행 (DB 저장을 위해)
+      await this.redis.publish('chat:message', JSON.stringify({
+        groupId: Number(body.group_id),
+        chatData: chatPayload
+      }));
+      
       // 브로드캐스트
-      this.server.to(body.group_id).emit('chat-message', chatPayload);
+      this.server.to(body.group_id).emit('chat_message', chatPayload);
     } catch (error) {
-      client.emit('chat-error', {
+      client.emit('chat_error', {
         message: '채팅 메시지 전송 중 오류가 발생했습니다.',
       });
     }
