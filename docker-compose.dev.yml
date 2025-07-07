@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # NestJS 애플리케이션
+  nestjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+
+  # BullMQ Worker (큐 처리용)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run start:worker
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+
+  # PostgreSQL (실제 프로젝트 설정과 동일)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=pick_px
+      - POSTGRES_USER=pixel_user
+      - POSTGRES_PASSWORD=teamgmgdogs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/create_db.sql:/docker-entrypoint-initdb.d/1_create_db.sql
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
+    networks:
+      - app-network
+
+  # Redis (ElastiCache 대신 로컬 개발용)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

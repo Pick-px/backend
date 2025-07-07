@@ -1,52 +1,51 @@
-# 멀티스테이지 빌드
-FROM node:20-alpine AS base
+# Build stage
+FROM node:20-alpine AS builder
 
-# 작업 디렉토리 설정
 WORKDIR /app
 
-# package.json과 package-lock.json 복사
+# Copy package files
 COPY package*.json ./
 
-# 개발 의존성 포함 설치
+# Install all dependencies (including dev dependencies for build)
 RUN npm ci
 
-# 소스 코드 복사
+# Copy source code
 COPY . .
 
-RUN chown -R node:node /app
-USER node
-
-# 개발 환경
-FROM base AS development
-COPY .env ./
-EXPOSE 3000
-CMD ["npm", "run", "start:dev"]
-
-
-# 빌드 스테이지
-FROM base AS build
+# Build the application
 RUN npm run build
 
-# 프로덕션 환경
+# Production stage
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# 프로덕션 의존성만 설치
-COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
 
-# 빌드된 파일 복사
-COPY --from=build /app/dist ./dist
-
-# 비루트 사용자 생성
+# Create non-root user
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nestjs -u 1001
 
-# 소유권 변경
-RUN chown -R nestjs:nodejs /app
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+
+# Switch to non-root user
 USER nestjs
 
+# Expose port
 EXPOSE 3000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Start the application
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/main"]
