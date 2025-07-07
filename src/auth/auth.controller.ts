@@ -43,7 +43,7 @@ export class AuthController {
       console.log('토큰 재발급 완료');
       res.status(200).json({ message: 'token refresh success' });
     } catch (err) {
-      console.log(err.message);
+      console.log(err);
       throw new ForbiddenException('token refresh failed');
     }
   }
