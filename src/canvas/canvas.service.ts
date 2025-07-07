@@ -163,7 +163,7 @@ export class CanvasService {
     try {
       const bool: boolean = status === 'active' ? true : false;
       const result: CanvasInfo[] = await this.dataSource.query(
-        `select id as "canvasId", title, created_at, size_x, size_y from canvases where is_active = $1::boolean`,
+        `select id as "canvasId", title, type, created_at, ended_at, size_x, size_y from canvases where is_active = $1::boolean`,
         [bool]
       );
       return result;
