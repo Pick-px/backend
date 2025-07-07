@@ -8,12 +8,23 @@ const cookieParser = require('cookie-parser');
 dotenv.config();
 
 async function bootstrap() {
+  // 환경변수 검증
+  const requiredEnvVars = ['JWT_SECRET'];
+
+  // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수
+  if (process.env.NODE_ENV === 'production') {
+    requiredEnvVars.push('DATABASE_URL', 'REDIS_URL');
+  }
+
+  for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+      throw new Error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
+    }
+  }
+
   const app = await NestFactory.create(AppModule);
 
-  const secret: string | undefined = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('❌ 환경변수 JWT_SECRET이 설정되지 않았습니다.');
-  }
+  const secret: string = process.env.JWT_SECRET!;
   const expressApp = app.getHttpAdapter().getInstance() as Express;
   expressApp.set('trust proxy', 1);
   app.use(cookieParser(secret));
@@ -39,14 +50,16 @@ async function bootstrap() {
       'http://localhost:5173',
       'https://pick-px.com',
       'https://ws.pick-px.com',
+      'https://api.pick-px.com', // 새 API 도메인 추가
     ],
     credentials: true,
     exposedHeaders: ['Authorization'],
   });
-  // [*] NestJS의 @WebSocketGateway()에 CORS 옵션을 이미 줬지만, NestJS는 내부적으로 Express 인스턴스를 쓰고 있기 때문에,
-  // 프론트엔드가 socket.io에 연결을 시도할 때 초기 HTTP 핸드셰이크 요청 자체가 Express에서 막히는 상황을 제거
 
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
-  //[*] 바인딩 주소 설정 안하면 도커 컨테이너 내부에서만 접근 가능
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 애플리케이션이 포트 ${port}에서 실행 중입니다.`);
+  console.log(`📚 Swagger 문서: http://localhost:${port}/api`);
+  console.log(`🏥 헬스체크: http://localhost:${port}/health`);
 }
 bootstrap();
