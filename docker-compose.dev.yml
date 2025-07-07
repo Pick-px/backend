@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - .:/app
       - /app/node_modules
@@ -50,11 +50,11 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sql/create_db.sql:/1_create_db.sql
-      - ./sql/schema.sql:/2_schema.sql
+      - ./sql/create_db.sql/create_db.sql:/docker-entrypoint-initdb.d/docker-entrypoint-initdb.d/1_create_db.sql
+      - ./sql/schema.sql/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
     networks:
       - app-network
 
@@ -62,7 +62,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     networks:
