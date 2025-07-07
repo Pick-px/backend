@@ -41,6 +41,7 @@ export class UserController {
     @Body() query: OAuthCallbackDto,
     @Res({ passthrough: true }) res: Response
   ) {
+    console.log('로그인 요청 도착');
     try {
       if (
         !query.state ||
@@ -55,7 +56,7 @@ export class UserController {
 
       const at = token.access_token;
       const rt = token.refresh_token;
-
+      console.log('at: ', at);
       res.setHeader('Authorization', `Bearer ${at}`);
 
       res.cookie('refresh_token', rt, {
@@ -67,6 +68,7 @@ export class UserController {
       });
       res.status(200);
     } catch (err) {
+      console.log(err);
       if (err instanceof HttpException) throw err;
       throw new NotFoundException('OAuth 실패');
     }

@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Inject,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -16,6 +11,7 @@ import { GroupUser } from '../entity/GroupUser.entity';
 import { User } from '../user/entity/user.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
+import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 
 @Injectable()
 export class CanvasService {
@@ -278,7 +274,10 @@ export class CanvasService {
   }
 
   // Redis 락 해제 (분산락 안전 해제)
-  private async releaseRedisLock(lockKey: string, lockUser: string): Promise<void> {
+  private async releaseRedisLock(
+    lockKey: string,
+    lockUser: string
+  ): Promise<void> {
     // Lua 스크립트로 락 소유자만 해제
     const script = `
       if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -326,9 +325,9 @@ export class CanvasService {
     y: number;
     color: string;
     userId: number;
-  }): Promise<any> {
+  }): Promise<DrawPixelResponse> {
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 20;
+    const cooldownSeconds = 10;
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);
@@ -338,8 +337,14 @@ export class CanvasService {
     }
 
     // 동시성 제어 포함 픽셀 그리기 적용
-    const result = await this.applyDrawPixel({ canvas_id, x, y, color, userId });
-    
+    const result = await this.applyDrawPixel({
+      canvas_id,
+      x,
+      y,
+      color,
+      userId,
+    });
+
     // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
       await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
@@ -357,14 +362,17 @@ export class CanvasService {
   }
 
   // user_canvas 테이블의 count를 1씩 증가시키는 메서드
-  private async incrementUserCanvasCount(userId: number, canvasId: number): Promise<void> {
+  private async incrementUserCanvasCount(
+    userId: number,
+    canvasId: number
+  ): Promise<void> {
     try {
       // user_canvas 레코드가 있는지 확인
       let userCanvas = await this.userCanvasRepository.findOne({
         where: {
           user: { id: userId },
-          canvas: { id: canvasId }
-        }
+          canvas: { id: canvasId },
+        },
       });
 
       if (userCanvas) {
@@ -377,12 +385,14 @@ export class CanvasService {
           user: { id: userId },
           canvas: { id: canvasId },
           count: 1,
-          joinedAt: new Date()
+          joinedAt: new Date(),
         });
         await this.userCanvasRepository.save(userCanvas);
       }
-      
-      console.log(`사용자 ${userId}의 캔버스 ${canvasId} 카운트 증가: ${userCanvas.count}`);
+
+      console.log(
+        `사용자 ${userId}의 캔버스 ${canvasId} 카운트 증가: ${userCanvas.count}`
+      );
     } catch (error) {
       console.error('user_canvas 카운트 증가 중 오류:', error);
       throw error;

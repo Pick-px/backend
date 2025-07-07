@@ -1,7 +1,6 @@
 import {
   Injectable,
   Inject,
-  UnauthorizedException,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -24,12 +23,12 @@ export class AuthService {
     private readonly userRepository: Repository<User>
   ) {}
 
-  async generateAccessJWT(user_id: string, userName: string): Promise<string> {
+  generateAccessJWT(user_id: string, userName: string): string {
     const payload = {
       sub: { userId: user_id, nickName: userName },
       jti: randomUUID(),
     };
-    return this.jwtService.sign(payload, { expiresIn: '15m' });
+    return this.jwtService.sign(payload, { expiresIn: '15s' });
   }
 
   async generateRefreshJWT(user_id: string): Promise<string> {
@@ -45,7 +44,7 @@ export class AuthService {
   ): Promise<{ access_token: string; refresh_token: string }> {
     const _id = user_id.toString();
     return {
-      access_token: await this.generateAccessJWT(_id, userName),
+      access_token: this.generateAccessJWT(_id, userName),
       refresh_token: await this.generateRefreshJWT(_id),
     };
   }
@@ -65,6 +64,7 @@ export class AuthService {
 
       return payload.sub.userId;
     } catch (err) {
+      console.log(err);
       throw new NotFoundException('토큰 검증 실패');
     }
   }
@@ -84,6 +84,7 @@ export class AuthService {
       await this.setRefreshTokenInRedis(payload.jti, token.refresh_token);
       return token;
     } catch (err) {
+      console.log(err);
       throw new ForbiddenException('토큰 재발급에 실패했습니다.');
     }
   }

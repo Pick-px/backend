@@ -95,8 +95,8 @@ class RedisMonitoringService {
 
   startMonitoring(): void {
     this.monitoringInterval = setInterval(async () => {
-      await this.monitorRedisStatus();
-    }, 600000); // 10분마다 모니터링
+      return await this.monitorRedisStatus();
+    }, 60000); // 10분마다 모니터링
   }
 
   async monitorRedisStatus(): Promise<void> {
@@ -104,14 +104,16 @@ class RedisMonitoringService {
       const info = await this.getRedisInfo();
       console.log('[Redis 모니터링]', {
         ...info,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
-
       // 메모리 사용량 경고
       if (info.memoryUsage > 80) {
-        console.warn('[Redis 모니터링] 메모리 사용량 경고:', `${info.memoryUsage}%`);
+        console.warn(
+          '[Redis 모니터링] 메모리 사용량 경고:',
+          `${info.memoryUsage}%`
+        );
       }
-
+      return;
     } catch (error) {
       console.error('[Redis 모니터링] 에러:', error);
     }
@@ -121,7 +123,7 @@ class RedisMonitoringService {
     try {
       const info = await this.redis.info();
       const lines = info.split('\r\n');
-      
+
       let usedMemory = 0;
       let maxMemory = 0;
       let connectedClients = 0;
@@ -142,10 +144,12 @@ class RedisMonitoringService {
         }
       }
 
-      const memoryUsage = maxMemory > 0 ? Math.round((usedMemory / maxMemory) * 100) : 0;
-      const hitRate = (keyspaceHits + keyspaceMisses) > 0 
-        ? Math.round((keyspaceHits / (keyspaceHits + keyspaceMisses)) * 100) 
-        : 0;
+      const memoryUsage =
+        maxMemory > 0 ? Math.round((usedMemory / maxMemory) * 100) : 0;
+      const hitRate =
+        keyspaceHits + keyspaceMisses > 0
+          ? Math.round((keyspaceHits / (keyspaceHits + keyspaceMisses)) * 100)
+          : 0;
 
       return {
         memoryUsage,
@@ -153,12 +157,12 @@ class RedisMonitoringService {
         maxMemory: this.formatBytes(maxMemory),
         connectedClients,
         hitRate: `${hitRate}%`,
-        status: 'connected'
+        status: 'connected',
       };
     } catch (error) {
       return {
         status: 'error',
-        error: error.message
+        error: error.message,
       };
     }
   }

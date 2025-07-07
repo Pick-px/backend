@@ -6,15 +6,12 @@ import { RedisModule } from './redis/redis.module'; // 추가된 부분
 import { CanvasModule } from './canvas/canvas.module';
 import { DatabaseModule } from './database/database.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserController } from './user/user.controller';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { UserCanvas } from './entity/UserCanvas.entity';
 import { Pixel } from './pixel/entity/pixel.entity';
 import { User } from './user/entity/user.entity';
 import { Canvas } from './canvas/entity/canvas.entity';
-import { GroupController } from './group/group.controller';
-import { GroupService } from './group/group.service';
 import { GroupModule } from './group/group.module';
 import { Group } from './group/entity/group.entity';
 import { GroupUser } from './entity/GroupUser.entity';
@@ -45,7 +42,7 @@ import { AppGateway } from './app.gateway';
     GroupModule,
     HttpModule,
   ],
-  controllers: [AppController, UserController, GroupController],
-  providers: [AppService, GroupService, AppGateway],
+  controllers: [AppController],
+  providers: [AppService, AppGateway],
 })
 export class AppModule {}

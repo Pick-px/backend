@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { JwtModule, JwtSecretRequestType } from '@nestjs/jwt';
+import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { UserModule } from 'src/user/user.module';
 import { JwtStrategy } from './jwt.strategy';
