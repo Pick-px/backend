@@ -13,7 +13,19 @@ metadata:
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
 spec:
   rules:
-  - host: api.pick-px.com
+  # Main domain pointing to EKS
+  - host: pick-px.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nestjs-service
+            port:
+              number: 80
+  # WebSocket domain also pointing to EKS
+  - host: ws.pick-px.com
     http:
       paths:
       - path: /
