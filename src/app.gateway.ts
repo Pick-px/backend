@@ -9,7 +9,11 @@ import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:5173', 'https://ws.pick-px.com', 'https://pick-px.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://ws.pick-px.com',
+      'https://pick-px.com',
+    ],
     credentials: true,
   },
 })
@@ -37,7 +41,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // JWT 토큰에서 유저 정보 추출
   getUserFromSocket(client: Socket): any {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.split(' ')[1];
       if (!token) return null;
       const payload = this.jwtService.verify(token) as any;
       return payload?.sub || payload || null;

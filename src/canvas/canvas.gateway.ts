@@ -1,4 +1,10 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { CanvasService } from './canvas.service';
 import Redis from 'ioredis';
@@ -50,7 +56,10 @@ export class CanvasGateway {
       return;
     }
     try {
-      const result = await this.canvasService.applyDrawPixelWithCooldown({ ...pixel, userId });
+      const result = await this.canvasService.applyDrawPixelWithCooldown({
+        ...pixel,
+        userId,
+      });
       if (!result.success) {
         console.log(`[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`);
         client.emit('pixel_error', { message: result.message, remaining: result.remaining });
