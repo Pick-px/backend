@@ -35,7 +35,11 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: ['http://localhost:5173', 'https://pick-px.com'],
+    origin: [
+      'http://localhost:5173',
+      'https://pick-px.com',
+      'https://ws.pick-px.com',
+    ],
     credentials: true,
     exposedHeaders: ['Authorization'],
   });

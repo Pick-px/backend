@@ -1,4 +1,10 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { CanvasService } from './canvas.service';
 
@@ -22,9 +28,7 @@ export class CanvasGateway {
   @WebSocketServer()
   server: Server;
 
-  constructor(
-    private readonly canvasService: CanvasService,
-  ) {}
+  constructor(private readonly canvasService: CanvasService) {}
 
   private getUserIdFromClient(client: Socket): number | null {
     const user = (client as any).user as SocketUser | undefined;
@@ -45,10 +49,18 @@ export class CanvasGateway {
       return;
     }
     try {
-      const result = await this.canvasService.applyDrawPixelWithCooldown({ ...pixel, userId });
+      const result = await this.canvasService.applyDrawPixelWithCooldown({
+        ...pixel,
+        userId,
+      });
       if (!result.success) {
-        console.log(`[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`);
-        client.emit('pixel-error', { message: result.message, remaining: result.remaining });
+        console.log(
+          `[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}, 남은 시간: ${result.remaining}초`
+        );
+        client.emit('pixel-error', {
+          message: result.message,
+          remaining: result.remaining,
+        });
         return;
       }
       // canvas_id 방에만 브로드캐스트
@@ -75,7 +87,10 @@ export class CanvasGateway {
     const userId = this.getUserIdFromClient(client);
     if (userId && data.canvas_id) {
       try {
-        const remaining = await this.canvasService.getCooldownRemaining(userId, data.canvas_id);
+        const remaining = await this.canvasService.getCooldownRemaining(
+          userId,
+          data.canvas_id
+        );
         client.emit('cooldown-info', { cooldown: remaining > 0, remaining });
       } catch (error) {
         // 쿨다운 정보 조회 실패 시 무시

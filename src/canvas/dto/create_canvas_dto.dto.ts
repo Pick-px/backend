@@ -13,7 +13,8 @@ export class createCanvasDto {
 
   @ApiProperty({
     example: 'public',
-    description: '캔버스 타입입니다. enum 값이 아닌 string으로 받습니다.',
+    description:
+      '캔버스 타입입니다. enum 값이 아닌 string으로 받습니다. 현재는 public / event로만 저장 가능',
   })
   @IsIn(['public', 'event'], { message: '타입은 비워둘 수 없습니다.' })
   type: 'public' | 'event';

@@ -134,4 +134,3 @@ alter table chats
 INSERT INTO users (id, email, password, created_at, updated_at, user_name)
 VALUES (1, 'pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
 ON CONFLICT (id) DO NOTHING;
-
