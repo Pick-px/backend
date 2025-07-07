@@ -133,8 +133,99 @@ jobs:
         kubectl apply -f k8s/hpa.yaml
         kubectl apply -f k8s/ingress.yaml
         
-        # Check deployment status
-        kubectl rollout status deployment/nestjs-app -n nestjs-app
+        # Check deployment status with real-time monitoring
+        echo "🚀 Starting deployment rollout monitoring..."
+        
+        # Start rollout status check in background
+        kubectl rollout status deployment/nestjs-app -n nestjs-app --timeout=600s &
+        ROLLOUT_PID=$!
+        
+        # Monitor pods and logs in real-time
+        echo "📊 Monitoring deployment progress..."
+        for i in {1..60}; do
+          echo "--- Check #$i ($(date)) ---"
+          
+          echo "Pod Status:"
+          kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+          
+          echo "ReplicaSet Status:"
+          kubectl get rs -n nestjs-app -l app=nestjs-app -o wide
+          
+          echo "Recent Events:"
+          kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -5
+          
+          # Get logs from any running pods
+          PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+          if [ ! -z "$PODS" ]; then
+            echo "Current Pod Logs:"
+            for pod in $PODS; do
+              echo "--- Logs from $pod ---"
+              kubectl logs $pod -n nestjs-app --tail=10 --since=30s 2>/dev/null || echo "No logs available yet"
+            done
+          fi
+          
+          # Check if rollout is still running
+          if ! kill -0 $ROLLOUT_PID 2>/dev/null; then
+            echo "✅ Rollout completed!"
+            break
+          fi
+          
+          echo "⏳ Waiting 10 seconds before next check..."
+          sleep 10
+        done
+        
+        # Wait for rollout to complete
+        wait $ROLLOUT_PID
+    
+    - name: Debug Deployment Issues
+      if: failure()
+      run: |
+        echo "🔍 ===== 배포 실패 디버깅 ====="
+        
+        echo "📊 Deployment 상세 정보:"
+        kubectl describe deployment nestjs-app -n nestjs-app
+        
+        echo ""
+        echo "📊 ReplicaSet 상태:"
+        kubectl describe rs -n nestjs-app -l app=nestjs-app
+        
+        echo ""
+        echo "🚨 실패한 Pod 상세 정보:"
+        kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+        
+        # 각 Pod의 상세 정보와 로그 출력
+        PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+        for pod in $PODS; do
+          echo ""
+          echo "--- Pod: $pod 상세 정보 ---"
+          kubectl describe pod $pod -n nestjs-app
+          
+          echo ""
+          echo "--- Pod: $pod 현재 로그 ---"
+          kubectl logs $pod -n nestjs-app --tail=50 || echo "현재 로그 없음"
+          
+          echo ""
+          echo "--- Pod: $pod 이전 로그 ---"
+          kubectl logs $pod -n nestjs-app --previous --tail=50 || echo "이전 로그 없음"
+        done
+        
+        echo ""
+        echo "🔍 최근 이벤트 (상세):"
+        kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -20
+        
+        echo ""
+        echo "🔍 클러스터 리소스 상태:"
+        kubectl top nodes || echo "메트릭 서버 사용 불가"
+        kubectl describe nodes | grep -A 10 "Allocated resources" || echo "노드 리소스 정보 없음"
+        
+        echo ""
+        echo "🔍 네임스페이스 리소스:"
+        kubectl get all -n nestjs-app
+        
+        echo ""
+        echo "🔍 Secret 및 ConfigMap 상태:"
+        kubectl get secrets -n nestjs-app
+        kubectl get configmaps -n nestjs-app
     
     - name: Post-Deployment Verification
       run: |

@@ -1,0 +1,93 @@
+name: Deploy with Debug Logs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    # 기존 배포 단계들...
+    
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/
+        
+    - name: Wait for deployment with timeout
+      run: |
+        echo "Waiting for deployment rollout..."
+        kubectl rollout status deployment/nestjs-app --timeout=300s || echo "Deployment timeout reached"
+        
+    - name: Debug - Check deployment status
+      if: always()
+      run: |
+        echo "=== Deployment Status ==="
+        kubectl get deployments -o wide
+        
+        echo "=== ReplicaSet Status ==="
+        kubectl get rs -o wide
+        
+        echo "=== Pod Status ==="
+        kubectl get pods -o wide
+        
+    - name: Debug - Describe deployment
+      if: always()
+      run: |
+        echo "=== Deployment Description ==="
+        kubectl describe deployment nestjs-app
+        
+    - name: Debug - Pod logs
+      if: always()
+      run: |
+        echo "=== Pod Logs ==="
+        # 모든 nestjs-app 관련 pod의 로그 출력
+        for pod in $(kubectl get pods -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}'); do
+          echo "--- Logs for pod: $pod ---"
+          kubectl logs $pod --previous=false || echo "No logs available for $pod"
+          echo "--- Previous logs for pod: $pod ---"
+          kubectl logs $pod --previous=true || echo "No previous logs available for $pod"
+        done
+        
+    - name: Debug - Events
+      if: always()
+      run: |
+        echo "=== Recent Events ==="
+        kubectl get events --sort-by='.lastTimestamp' | tail -20
+        
+    - name: Debug - Node resources
+      if: always()
+      run: |
+        echo "=== Node Resources ==="
+        kubectl top nodes || echo "Metrics server not available"
+        kubectl describe nodes | grep -A 5 "Allocated resources" || echo "Node resource info not available"
+        
+    - name: Debug - Service and Ingress status
+      if: always()
+      run: |
+        echo "=== Service Status ==="
+        kubectl get svc -o wide
+        
+        echo "=== Ingress Status ==="
+        kubectl get ingress -o wide
+        
+        echo "=== HPA Status ==="
+        kubectl get hpa -o wide
+        
+    - name: Debug - Image pull status
+      if: always()
+      run: |
+        echo "=== Checking image pull issues ==="
+        kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[*].state}{"\n"}{end}' | grep -i "image" || echo "No image pull issues found"
+        
+    - name: Cleanup on failure
+      if: failure()
+      run: |
+        echo "=== Cleaning up failed deployment ==="
+        kubectl delete deployment nestjs-app --ignore-not-found=true
+        kubectl delete pods -l app=nestjs-app --ignore-not-found=true
