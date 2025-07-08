@@ -28,6 +28,13 @@ import { AppGateway } from './app.gateway';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
+        
+        // 환경변수 디버깅 로그
+        console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
+        console.log('[DB] DATABASE_URL 존재:', !!databaseUrl);
+        if (databaseUrl) {
+          console.log('[DB] DATABASE_URL 사용 (마스킹):', databaseUrl.replace(/\/\/.*@/, '//***@'));
+        }
 
         if (databaseUrl) {
           // 프로덕션: DATABASE_URL 사용
