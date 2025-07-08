@@ -44,6 +44,7 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
+      - POSTGRES_LOG_STATEMENT=all
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -53,8 +54,8 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sql/create_db.sql/create_db.sql:/docker-entrypoint-initdb.d/docker-entrypoint-initdb.d/1_create_db.sql
-      - ./sql/schema.sql/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
+      - ./sql/create_db/create_db.sql:/docker-entrypoint-initdb.d/1_create_db.sql
+      - ./sql/schema/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
     networks:
       - app-network
 

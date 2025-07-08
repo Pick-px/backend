@@ -10,18 +10,18 @@ dotenv.config();
 
 async function bootstrap() {
   // 환경변수 검증
-  const requiredEnvVars = ['JWT_SECRET'];
+  // const requiredEnvVars = ['JWT_SECRET'];
 
-  // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수
-  if (process.env.NODE_ENV === 'production') {
-    requiredEnvVars.push('DATABASE_URL', 'REDIS_URL');
-  }
+  // // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수
+  // if (process.env.NODE_ENV === 'production') {
+  //   requiredEnvVars.push('DATABASE_URL', 'REDIS_URL');
+  // }
 
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      throw new Error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
-    }
-  }
+  // for (const envVar of requiredEnvVars) {
+  //   if (!process.env[envVar]) {
+  //     throw new Error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
+  //   }
+  // }
 
   const app = await NestFactory.create(AppModule);
 
