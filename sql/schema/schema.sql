@@ -1,3 +1,5 @@
+\connect pick_px;
+
 create table if not exists users
 (
     id         bigserial,
