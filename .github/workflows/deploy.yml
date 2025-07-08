@@ -86,6 +86,15 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          REDIS_TLS: ${{ secrets.REDIS_TLS }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_SSL: ${{secrets.POSTGRES_SSL}}
 
       - name: Update kubeconfig and verify connection
         run: |
@@ -118,7 +127,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "🏗️ Docker 이미지 빌드 및 푸시..."
-          
+
           # 캐시 없이 새로 빌드 (문제 해결을 위해)
           docker build --no-cache -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -185,7 +194,7 @@ jobs:
           else
             echo "✅ Metrics Server가 이미 설치되어 있습니다"
           fi
-          
+
           # Metrics Server 상태 확인
           echo "📊 Metrics Server 상태:"
           kubectl get deployment metrics-server -n kube-system
@@ -228,6 +237,15 @@ jobs:
             --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
             --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
             --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+            --from-literal=postgres-host="${{ secrets.POSTGRES_HOST }}" \
+            --from-literal=postgres-port="${{ secrets.POSTGRES_PORT }}" \
+            --from-literal=postgres-user="${{ secrets.POSTGRES_USER }}" \
+            --from-literal=postgres-password="${{ secrets.POSTGRES_PASSWORD }}" \
+            --from-literal=postgres-db="${{ secrets.POSTGRES_DB }}" \
+            --from-literal=postgres-ssl="${{ secrets.POSTGRES_SSL }}" \
+            --from-literal=redis-host="${{ secrets.REDIS_HOST }}" \
+            --from-literal=redis-port="${{ secrets.REDIS_PORT }}" \
+            --from-literal=redis-tls="${{ secrets.REDIS_TLS }}" \
             --namespace=$NAMESPACE \
             --dry-run=client -o yaml | kubectl apply -f -
 
@@ -242,12 +260,15 @@ jobs:
 
           # Update image in deployment
           sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/deployment.yaml
+          sed -i "s|863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest|$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|g" k8s-temp/worker-deployment.yaml
 
           # Update namespace in all files
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             sed -i "s|namespace: nestjs-app|namespace: $NAMESPACE|g" k8s-temp/*.yaml
             sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/deployment.yaml
             sed -i "s|app: nestjs-app|app: nestjs-app-staging|g" k8s-temp/deployment.yaml
+            sed -i "s|name: nestjs-worker|name: nestjs-worker-staging|g" k8s-temp/worker-deployment.yaml
+            sed -i "s|app: nestjs-worker|app: nestjs-worker-staging|g" k8s-temp/worker-deployment.yaml
             sed -i "s|name: nestjs-service|name: nestjs-service-staging|g" k8s-temp/service.yaml
             sed -i "s|name: nestjs-hpa|name: nestjs-hpa-staging|g" k8s-temp/hpa.yaml
             sed -i "s|name: nestjs-app|name: nestjs-app-staging|g" k8s-temp/hpa.yaml
@@ -257,6 +278,7 @@ jobs:
           # Deploy application
           echo "📦 애플리케이션 배포..."
           kubectl apply -f k8s-temp/deployment.yaml
+          kubectl apply -f k8s-temp/worker-deployment.yaml
           kubectl apply -f k8s-temp/service.yaml
           kubectl apply -f k8s-temp/hpa.yaml
 
@@ -279,46 +301,66 @@ jobs:
         run: |
           echo "🔍 배포 진행 상황 모니터링..."
 
-          # Start rollout status check in background
+          # Start rollout status check for both deployments in background
           kubectl rollout status deployment/nestjs-app -n nestjs-app --timeout=600s &
-          ROLLOUT_PID=$!
+          APP_ROLLOUT_PID=$!
+
+          kubectl rollout status deployment/nestjs-worker -n nestjs-app --timeout=600s &
+          WORKER_ROLLOUT_PID=$!
 
           # Monitor pods and logs in real-time
           echo "📊 실시간 모니터링 시작..."
           for i in {1..10}; do
             echo "--- 체크 #$i ($(date '+%H:%M:%S')) ---"
             
-            echo "Pod 상태:"
+            echo "App Pod 상태:"
             kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
             
+            echo "Worker Pod 상태:"
+            kubectl get pods -n nestjs-app -l app=nestjs-worker -o wide
+            
             echo "ReplicaSet 상태:"
-            kubectl get rs -n nestjs-app -l app=nestjs-app -o wide
+            kubectl get rs -n nestjs-app -o wide
             
             echo "최근 이벤트:"
-            kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -3
+            kubectl get events -n nestjs-app --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -5
             
             # Get logs from any running pods
-            PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
-            if [ ! -z "$PODS" ]; then
-              echo "현재 Pod 로그:"
-              for pod in $PODS; do
+            APP_PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
+            WORKER_PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-worker -o jsonpath='{.items[*].metadata.name}')
+            
+            if [ ! -z "$APP_PODS" ]; then
+              echo "App Pod 로그:"
+              for pod in $APP_PODS; do
                 echo "--- $pod 로그 ---"
-                kubectl logs $pod -n nestjs-app --tail=5 --since=30s 2>/dev/null || echo "로그 없음"
+                kubectl logs $pod -n nestjs-app --tail=3 --since=30s 2>/dev/null || echo "로그 없음"
               done
             fi
             
-            # Check if rollout is still running
-            if ! kill -0 $ROLLOUT_PID 2>/dev/null; then
-              echo "✅ 롤아웃 완료!"
+            if [ ! -z "$WORKER_PODS" ]; then
+              echo "Worker Pod 로그:"
+              for pod in $WORKER_PODS; do
+                echo "--- $pod 로그 ---"
+                kubectl logs $pod -n nestjs-app --tail=3 --since=30s 2>/dev/null || echo "로그 없음"
+              done
+            fi
+            
+            # Check if both rollouts are still running
+            APP_RUNNING=$(kill -0 $APP_ROLLOUT_PID 2>/dev/null && echo "true" || echo "false")
+            WORKER_RUNNING=$(kill -0 $WORKER_ROLLOUT_PID 2>/dev/null && echo "true" || echo "false")
+            
+            if [[ "$APP_RUNNING" == "false" && "$WORKER_RUNNING" == "false" ]]; then
+              echo "✅ 모든 롤아웃 완료!"
               break
             fi
             
-            echo "⏳ 20초 후 다시 확인..."
+            echo "⏳ 20초 후 다시 확인... (App: $APP_RUNNING, Worker: $WORKER_RUNNING)"
             sleep 20
           done
 
-          # Wait for rollout to complete
-          wait $ROLLOUT_PID
+          # Wait for both rollouts to complete
+          wait $APP_ROLLOUT_PID
+          wait $WORKER_ROLLOUT_PID
 
       - name: Debug Deployment Issues
         if: failure()
@@ -327,18 +369,20 @@ jobs:
 
           echo "📊 Deployment 상세 정보:"
           kubectl describe deployment nestjs-app -n nestjs-app
+          kubectl describe deployment nestjs-worker -n nestjs-app
 
           echo ""
           echo "📊 ReplicaSet 상태:"
           kubectl describe rs -n nestjs-app -l app=nestjs-app
+          kubectl describe rs -n nestjs-app -l app=nestjs-worker
 
           echo ""
           echo "🚨 실패한 Pod 상세 정보:"
-          kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+          kubectl get pods -n nestjs-app -o wide
 
           # 각 Pod의 상세 정보와 로그 출력
-          PODS=$(kubectl get pods -n nestjs-app -l app=nestjs-app -o jsonpath='{.items[*].metadata.name}')
-          for pod in $PODS; do
+          ALL_PODS=$(kubectl get pods -n nestjs-app -o jsonpath='{.items[*].metadata.name}')
+          for pod in $ALL_PODS; do
             echo ""
             echo "--- Pod: $pod 상세 정보 ---"
             kubectl describe pod $pod -n nestjs-app
@@ -379,8 +423,12 @@ jobs:
           kubectl get nodes -o wide
 
           echo ""
-          echo "🚀 Pod 상태:"
-          kubectl get pods -n nestjs-app -o wide
+          echo "🚀 App Pod 상태:"
+          kubectl get pods -n nestjs-app -l app=nestjs-app -o wide
+
+          echo ""
+          echo "⚙️ Worker Pod 상태:"
+          kubectl get pods -n nestjs-app -l app=nestjs-worker -o wide
 
           echo ""
           echo "🌐 서비스 상태:"
@@ -395,8 +443,12 @@ jobs:
           kubectl get events -n nestjs-app --sort-by='.lastTimestamp' | tail -10
 
           echo ""
-          echo "🏥 애플리케이션 로그 (마지막 20줄):"
-          kubectl logs -n nestjs-app deployment/nestjs-app --tail=20 || echo "로그를 가져올 수 없습니다"
+          echo "🏥 App 로그 (마지막 10줄):"
+          kubectl logs -n nestjs-app deployment/nestjs-app --tail=10 || echo "App 로그를 가져올 수 없습니다"
+
+          echo ""
+          echo "⚙️ Worker 로그 (마지막 10줄):"
+          kubectl logs -n nestjs-app deployment/nestjs-worker --tail=10 || echo "Worker 로그를 가져올 수 없습니다"
 
           echo ""
           echo "✅ 배포 완료!"

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # NestJS 애플리케이션
-  nestjs-app:
+  app:
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -15,6 +15,11 @@ services:
       - NODE_ENV=development
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     depends_on:
       - postgres
       - redis
@@ -34,6 +39,11 @@ services:
       - NODE_ENV=development
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     depends_on:
       - postgres
       - redis
@@ -44,12 +54,11 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_LOG_STATEMENT=all
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - '5432:5432'
     volumes:
@@ -68,6 +77,37 @@ services:
       - redis_data:/data
     networks:
       - app-network
+
+  # ==========================================
+  # 3개 Redis 분리 (환경변수로 관리 가능)
+  # ==========================================
+  #
+  # # Redis (ElastiCache 대신 로컬 개발용)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+  #
+  # # 픽셀 전용 Redis (오토 스케일링 대응)
+  # redis-pixel:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6380:6379"
+  #   volumes:
+  #     - redis_pixel_data:/data
+  #   command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+  #
+  # # 채팅 전용 Redis (오토 스케일링 대응)
+  # redis-chat:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6381:6379"
+  #   volumes:
+  #     - redis_chat_data:/data
+  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
 volumes:
   postgres_data:
