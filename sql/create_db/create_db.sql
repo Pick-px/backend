@@ -17,9 +17,9 @@ $$
 BEGIN
    IF NOT EXISTS (
       SELECT FROM pg_database
-      WHERE datname = 'pick_px'
+      WHERE datname = 'nestjs_db'
    ) THEN
-      CREATE DATABASE pick_px OWNER pixel_user;
+      CREATE DATABASE nestjs_db OWNER pixel_user;
    END IF;
 END
 $$;
