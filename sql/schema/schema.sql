@@ -1,3 +1,5 @@
+\connect nestjs_db;
+
 create table if not exists users
 (
     id         bigserial,
