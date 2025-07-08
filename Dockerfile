@@ -21,10 +21,18 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 # Install dumb-init and curl for proper signal handling and health checks
-RUN apk add --no-cache dumb-init curl
+RUN apk add --no-cache dumb-init curl ca-certificates
 
-# Download AWS RDS SSL certificate
-RUN curl -o /app/rds-ca-cert.pem https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem
+# Download and install AWS RDS CA certificates
+RUN curl -o /tmp/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem && \
+    curl -o /tmp/ap-northeast-2-bundle.pem https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem && \
+    mkdir -p /app/certs && \
+    cp /tmp/global-bundle.pem /app/certs/ && \
+    cp /tmp/ap-northeast-2-bundle.pem /app/certs/ && \
+    # 시스템 CA 스토어에도 추가
+    cat /tmp/global-bundle.pem >> /etc/ssl/certs/ca-certificates.crt && \
+    cat /tmp/ap-northeast-2-bundle.pem >> /etc/ssl/certs/ca-certificates.crt && \
+    rm /tmp/*.pem
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
@@ -39,8 +47,8 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 
-# Make sure the certificate is readable by the nestjs user
-RUN chown nestjs:nodejs /app/rds-ca-cert.pem
+# Make sure the certificates are readable by the nestjs user
+RUN chown -R nestjs:nodejs /app/certs
 
 # Switch to non-root user
 USER nestjs
