@@ -4,7 +4,7 @@ metadata:
   name: nestjs-ingress
   namespace: nestjs-app
   annotations:
-    kubernetes.io/ingress.class: alb
+    ingressClassName: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
@@ -21,13 +21,13 @@ metadata:
     alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
 spec:
   rules:
-  # 모든 트래픽을 NestJS 서비스로 라우팅
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: nestjs-service
-            port:
-              number: 80
+    # 모든 트래픽을 NestJS 서비스로 라우팅
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nestjs-service
+                port:
+                  number: 80
