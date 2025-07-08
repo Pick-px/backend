@@ -5,96 +5,61 @@ services:
   app:
     build:
       context: .
-      target: development
+      target: production
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
-    depends_on:
-      - redis
-      - postgres
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    restart: unless-stopped
+    networks:
+      - app-network
 
+  # BullMQ Worker (큐 처리용)
   worker:
     build:
       context: .
-      target: development
+      target: production
     command: npm run start:worker
-    depends_on:
-      - redis
-      - postgres
-    volumes:
-      - .:/app
-      - /app/node_modules
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    restart: unless-stopped
+    networks:
+      - app-network
 
-  # ==========================================
-  # Redis 통합
-  # ==========================================
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+networks:
+  app-network:
+    driver: bridge
 
-  # ==========================================
-  # 3개 Redis 분리 (환경변수로 관리 가능)
-  # ==========================================
-  #
-  # # Redis (ElastiCache 대신 로컬 개발용)
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-  #
-  # # 픽셀 전용 Redis (오토 스케일링 대응)
-  # redis-pixel:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6380:6379"
-  #   volumes:
-  #     - redis_pixel_data:/data
-  #   command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
-  #
-  # # 채팅 전용 Redis (오토 스케일링 대응)
-  # redis-chat:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6381:6379"
-  #   volumes:
-  #     - redis_chat_data:/data
-  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
-  # PostgreSQL (RDS 대신 로컬 개발용, 환경변수 사용)
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: ${POSTGRES_HOST}
-      POSTGRES_PORT: ${POSTGRES_PORT}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./sql/create_db.sql/create_db.sql:/docker-entrypoint-initdb.d/1_create_db.sql
-      - ./sql/schema.sql/schema.sql:/docker-entrypoint-initdb.d/2_schema.sql
-
-volumes:
-  redis_data:
-  # redis_pixel_data:  # 3개 버전용
-  # redis_chat_data:   # 3개 버전용
-  postgres_data:
+# [제거]
+# 로컬 Redis 서비스 - ElastiCache 사용으로 대체
+# 로컬 PostgreSQL 서비스 - RDS 사용으로 대체
+# 개발용 볼륨 마운트 - 배포 환경에서는 불필요
+# 개발용 depends_on - 외부 서비스이므로 제거
+# [추가]
+# production 빌드 타겟 - 최적화된 프로덕션 이미지 사용
+# PostgreSQL 환경변수 - RDS 연결을 위한 모든 환경변수 추가
+# restart: unless-stopped - 컨테이너 자동 재시작 정책
+# app-network - 컨테이너 간 통신을 위한 네트워크
+# [환경변수 구성]
+# REDIS_HOST - ElastiCache 엔드포인트
+# REDIS_PORT - ElastiCache 포트 (보통 6379)
+# POSTGRES_HOST - RDS 엔드포인트
+# POSTGRES_PORT - RDS 포트 (보통 5432)
+# POSTGRES_USER - RDS 사용자명
+# POSTGRES_PASSWORD - RDS 비밀번호
+# POSTGRES_DB - RDS 데이터베이스명
