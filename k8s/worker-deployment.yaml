@@ -5,94 +5,91 @@ metadata:
   namespace: nestjs-app
   labels:
     app: nestjs-worker
+    component: worker
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: nestjs-worker
+      component: worker
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
         app: nestjs-worker
+        component: worker
     spec:
       containers:
         - name: nestjs-worker
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
-          command: ["npm", "run", "start:worker"]
+          command: ["node", "dist/queues/bullmq.worker.js"]
           env:
             - name: NODE_ENV
               value: 'production'
+            # JWT Secret
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: jwt-secret
+            # Database Connection
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: database-url
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-url
-            # Redis 개별 환경변수 (fallback용)
-            - name: REDIS_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-host
-                  optional: true
-            - name: REDIS_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-port
-                  optional: true
-            - name: REDIS_TLS
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-tls
-                  optional: true
-            # PostgreSQL 개별 환경변수 (fallback용)
             - name: POSTGRES_HOST
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-host
-                  optional: true
             - name: POSTGRES_PORT
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-port
-                  optional: true
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-user
-                  optional: true
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-password
-                  optional: true
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-db
-                  optional: true
             - name: POSTGRES_SSL
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-ssl
-                  optional: true
+            # Redis Connection
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-url
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-host
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-port
+            - name: REDIS_TLS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-tls
           resources:
             requests:
               memory: '256Mi'
@@ -100,15 +97,16 @@ spec:
             limits:
               memory: '512Mi'
               cpu: '400m'
-          # Worker 프로세스 상태 확인을 위한 probe
+          # Worker 프로세스 상태 확인을 위한 간단한 probe
           livenessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - "ps aux | grep -v grep | grep 'bullmq.worker' || exit 1"
+                - "pgrep -f 'node.*worker' > /dev/null"
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
       restartPolicy: Always
+      terminationGracePeriodSeconds: 60
