@@ -53,8 +53,10 @@ const createRedisClient = (configService: ConfigService): Redis => {
         return delay;
       },
       lazyConnect: true,
-      connectTimeout: 10000,
-      commandTimeout: 5000,
+      connectTimeout: 15000,
+      commandTimeout: 10000,
+      enableReadyCheck: false,
+      maxLoadingTimeout: 0,
     });
   } else {
     // 로컬 개발: 기존 설정 사용
@@ -65,20 +67,30 @@ const createRedisClient = (configService: ConfigService): Redis => {
       password: password || undefined,
       db,
       lazyConnect: true,
+      connectTimeout: 10000,
+      commandTimeout: 5000,
     });
   }
 
   // 연결 이벤트 리스너
   redis.on('connect', () => {
-    console.log(`[Redis] 연결 성공: ${host}:${port}`);
+    console.log(`[Redis] 연결 성공`);
+  });
+
+  redis.on('ready', () => {
+    console.log(`[Redis] 준비 완료`);
   });
 
   redis.on('error', (error) => {
-    console.error(`[Redis] 연결 에러:`, error);
+    console.error(`[Redis] 연결 에러:`, error.message);
   });
 
   redis.on('close', () => {
     console.log(`[Redis] 연결 종료`);
+  });
+
+  redis.on('reconnecting', () => {
+    console.log(`[Redis] 재연결 중...`);
   });
 
   return redis;

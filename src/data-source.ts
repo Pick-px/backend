@@ -11,16 +11,21 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
+console.log('[DB] DATABASE_URL 존재:', !!process.env.DATABASE_URL);
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
   ...(process.env.DATABASE_URL
     ? {
         // 프로덕션: DATABASE_URL 사용
         url: process.env.DATABASE_URL,
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: process.env.NODE_ENV === 'production' ? true : false,
+        extra: process.env.NODE_ENV === 'production' ? {
+          ssl: {
+            rejectUnauthorized: false, // AWS RDS 인증서 문제 해결
+          }
+        } : {}
       }
     : {
         // 로컬 개발: 기존 설정 사용
