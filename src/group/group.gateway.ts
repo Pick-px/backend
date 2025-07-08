@@ -125,7 +125,7 @@ export class GroupGateway {
         created_at: now.toISOString(),
       };
       // Redis에 저장 (12시간 TTL)
-      const chatKey = `chat:${body.group_id}`;
+      const chatKey = `chat:${Number(body.group_id)}`;
       await this.redis.lpush(chatKey, JSON.stringify(chatPayload));
       
       // 채팅 리스트 크기 제한 (최대 50개)

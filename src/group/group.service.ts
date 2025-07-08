@@ -36,14 +36,14 @@ export class GroupService {
     take: number
   ): Promise<Chat[]> {
     // Redis에서 최근 메시지만 조회 (최대 50개로 제한)
-    const redisChats = await this.redis.lrange(`chat:${groupId}`, 0, Math.min(take, 50) - 1);
+    const redisChats = await this.redis.lrange(`chat:${Number(groupId)}`, 0, Math.min(take, 50) - 1);
     
     // Redis에 있는 메시지들 파싱
     const redisMessages = redisChats
       .map(chatStr => JSON.parse(chatStr))
       .filter(chat => chat.id && chat.user && chat.message) // 유효한 메시지만
       .map(chat => ({
-        id: chat.id,
+        id: Number(chat.id),
         groupId,
         userId: chat.user.id,
         message: chat.message,
@@ -54,52 +54,8 @@ export class GroupService {
         }
       })) as Chat[];
     
-    // Redis 메시지가 충분하면 반환
-    if (redisMessages.length >= take) {
-      return redisMessages.slice(0, take);
-    }
-    
-    // Redis 메시지가 부족하면 DB에서 추가 조회
-    const dbTake = take - redisMessages.length;
-    const dbChats = await this.groupRepository.manager.find(Chat, {
-      where: { groupId },
-      order: { createdAt: 'DESC' },
-      take: dbTake,
-      relations: ['user'],
-    });
-    
-    // DB 결과를 Redis에 캐싱
-    if (dbChats.length > 0) {
-      const chatKey = `chat:${groupId}`;
-      
-      // DB 메시지를 Redis 형식으로 변환
-      const dbChatPayloads = dbChats.map(chat => ({
-        id: chat.id,
-        user: { id: chat.user.id, user_name: chat.user.userName },
-        message: chat.message,
-        created_at: chat.createdAt.toISOString(),
-      }));
-      
-      // 기존 Redis 메시지와 합쳐서 저장
-      const allChats = [...redisMessages, ...dbChats];
-      const allPayloads = allChats.map(chat => ({
-        id: chat.id,
-        user: { id: chat.user.id, user_name: chat.user.userName },
-        message: chat.message,
-        created_at: chat.createdAt.toISOString(),
-      }));
-      
-      // Redis에 저장 (최대 50개, 12시간 TTL)
-      await this.redis.del(chatKey);
-      if (allPayloads.length > 0) {
-        await this.redis.lpush(chatKey, ...allPayloads.map(p => JSON.stringify(p)));
-        await this.redis.ltrim(chatKey, 0, 49);
-        await this.redis.expire(chatKey, 12 * 60 * 60);
-      }
-    }
-    
-    // Redis + DB 메시지 합치기 (최신순)
-    return [...redisMessages, ...dbChats];
+    // Redis에 있는 메시지만 반환
+    return redisMessages.slice(0, take);
   }
 
   async createGroup(
