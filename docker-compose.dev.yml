@@ -78,6 +78,37 @@ services:
     networks:
       - app-network
 
+  # ==========================================
+  # 3개 Redis 분리 (환경변수로 관리 가능)
+  # ==========================================
+  #
+  # # Redis (ElastiCache 대신 로컬 개발용)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+  #
+  # # 픽셀 전용 Redis (오토 스케일링 대응)
+  # redis-pixel:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6380:6379"
+  #   volumes:
+  #     - redis_pixel_data:/data
+  #   command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+  #
+  # # 채팅 전용 Redis (오토 스케일링 대응)
+  # redis-chat:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6381:6379"
+  #   volumes:
+  #     - redis_chat_data:/data
+  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
 volumes:
   postgres_data:
   redis_data:
