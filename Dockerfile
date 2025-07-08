@@ -23,6 +23,9 @@ WORKDIR /app
 # Install dumb-init and curl for proper signal handling and health checks
 RUN apk add --no-cache dumb-init curl
 
+# Download AWS RDS SSL certificate
+RUN curl -o /app/rds-ca-cert.pem https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nestjs -u 1001
@@ -35,6 +38,9 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+
+# Make sure the certificate is readable by the nestjs user
+RUN chown nestjs:nodejs /app/rds-ca-cert.pem
 
 # Switch to non-root user
 USER nestjs
