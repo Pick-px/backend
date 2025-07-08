@@ -47,13 +47,15 @@ import { AppGateway } from './app.gateway';
           return {
             type: 'postgres',
             host: configService.get<string>('POSTGRES_HOST'),
-            port: parseInt(configService.get<string>('POSTGRES_PORT') || '5432', 10),
+            port: parseInt(
+              configService.get<string>('POSTGRES_PORT') || '5432',
+              10
+            ),
             username: configService.get<string>('POSTGRES_USER'),
             password: configService.get<string>('POSTGRES_PASSWORD'),
             database: configService.get<string>('POSTGRES_DB'),
             autoLoadEntities: true,
             entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
-            synchronize: true, // 개발에서만 true
           };
         }
       },
