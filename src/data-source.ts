@@ -39,7 +39,9 @@ const getSSLConfig = () => {
     }
   }
 
-  console.log('[DB] CA 인증서 파일을 찾을 수 없음, rejectUnauthorized: false 사용');
+  console.log(
+    '[DB] CA 인증서 파일을 찾을 수 없음, rejectUnauthorized: false 사용'
+  );
   return {
     rejectUnauthorized: false,
   };
