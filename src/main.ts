@@ -19,9 +19,21 @@ async function bootstrap() {
 
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
-      throw new Error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
+      console.error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
+      // 프로덕션에서는 에러로 종료하지만, 개발환경에서는 경고만 출력
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
     }
   }
+
+  console.log('🔧 환경변수 검증 완료');
+  console.log(`📍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔑 JWT_SECRET: ${process.env.JWT_SECRET ? '설정됨' : '미설정'}`);
+  console.log(
+    `🗄️ DATABASE_URL: ${process.env.DATABASE_URL ? '설정됨' : '미설정'}`
+  );
+  console.log(`🔴 REDIS_URL: ${process.env.REDIS_URL ? '설정됨' : '미설정'}`);
 
   const app = await NestFactory.create(AppModule);
 

@@ -55,6 +55,38 @@ jobs:
           sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
           kubectl version --client
 
+      - name: Verify GitHub Secrets
+        run: |
+          echo "🔍 GitHub Secrets 존재 여부 확인..."
+
+          # JWT_SECRET 확인 (값은 노출하지 않음)
+          if [ -z "$JWT_SECRET" ]; then
+            echo "❌ JWT_SECRET이 설정되지 않았습니다!"
+            exit 1
+          else
+            echo "✅ JWT_SECRET이 설정되어 있습니다"
+          fi
+
+          # DATABASE_URL 확인
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ DATABASE_URL이 설정되지 않았습니다!"
+            exit 1
+          else
+            echo "✅ DATABASE_URL이 설정되어 있습니다"
+          fi
+
+          # REDIS_URL 확인
+          if [ -z "$REDIS_URL" ]; then
+            echo "❌ REDIS_URL이 설정되지 않았습니다!"
+            exit 1
+          else
+            echo "✅ REDIS_URL이 설정되어 있습니다"
+          fi
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+
       - name: Update kubeconfig and verify connection
         run: |
           echo "🔧 EKS kubeconfig 설정..."
@@ -138,6 +170,25 @@ jobs:
             echo "✅ AWS Load Balancer Controller가 이미 설치되어 있습니다"
           fi
 
+      - name: Install Metrics Server (if not exists)
+        run: |
+          echo "🔍 Metrics Server 확인..."
+          if ! kubectl get deployment metrics-server -n kube-system > /dev/null 2>&1; then
+            echo "📊 Metrics Server 설치 중..."
+            kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+            
+            # Wait for metrics server to be ready
+            echo "⏳ Metrics Server 준비 대기 중..."
+            kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=300s
+          else
+            echo "✅ Metrics Server가 이미 설치되어 있습니다"
+          fi
+          
+          # Metrics Server 상태 확인
+          echo "📊 Metrics Server 상태:"
+          kubectl get deployment metrics-server -n kube-system
+          kubectl top nodes || echo "⚠️ 노드 메트릭을 아직 사용할 수 없습니다 (설치 직후 정상)"
+
       - name: Deploy to EKS
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -151,7 +202,14 @@ jobs:
           # Create namespace for staging if it's a PR
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "📁 스테이징 네임스페이스 생성..."
-            kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create namespace $NAMESPACE --dry-run=client -o yaml | \
+            kubectl apply -f -
+            
+            # 스테이징 환경에 TTL 라벨 추가 (24시간 후 정리 대상)
+            kubectl label namespace $NAMESPACE \
+              staging.cleanup/ttl=$(date -d '+24 hours' -u +%Y-%m-%dT%H:%M:%SZ) \
+              staging.cleanup/pr-number=${{ github.event.number }} \
+              --overwrite
           else
             echo "📁 프로덕션 네임스페이스 생성..."
             kubectl apply -f k8s/namespace.yaml
@@ -165,6 +223,11 @@ jobs:
             --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
             --namespace=$NAMESPACE \
             --dry-run=client -o yaml | kubectl apply -f -
+
+          # Debug: 시크릿 확인 (값은 노출하지 않음)
+          echo "🔍 생성된 시크릿 확인..."
+          kubectl get secret app-secrets -n $NAMESPACE --no-headers
+          kubectl describe secret app-secrets -n $NAMESPACE
 
           # Copy and update deployment files for the environment
           echo "🔄 배포 파일 준비..."
@@ -190,9 +253,17 @@ jobs:
           kubectl apply -f k8s-temp/service.yaml
           kubectl apply -f k8s-temp/hpa.yaml
 
-          # Only apply ingress for production
+          # Ingress 배포 (기존 ALB를 EKS 연결 ALB로 대체)
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "🌐 Ingress 배포 중... (기존 ALB 대체)"
             kubectl apply -f k8s-temp/ingress.yaml
+            
+            # Ingress 상태 확인
+            echo "⏳ Ingress 생성 대기 중..."
+            kubectl wait --for=condition=ready ingress/nestjs-ingress -n nestjs-app --timeout=300s || echo "Ingress 대기 시간 초과"
+            
+            # ALB 정보 출력
+            kubectl get ingress nestjs-ingress -n nestjs-app -o wide
           fi
 
           echo "✅ 리소스 배포 완료"

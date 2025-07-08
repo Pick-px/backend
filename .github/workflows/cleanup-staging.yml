@@ -1,0 +1,67 @@
+name: Cleanup Staging Environment
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ap-northeast-2 --name nestjs-cluster
+
+      - name: Cleanup staging environment
+        run: |
+          echo "🧹 스테이징 환경 정리 중..."
+          
+          # 스테이징 네임스페이스 존재 확인
+          if kubectl get namespace nestjs-app-staging > /dev/null 2>&1; then
+            echo "📦 스테이징 리소스 삭제 중..."
+            
+            # 모든 리소스 삭제
+            kubectl delete all --all -n nestjs-app-staging || echo "리소스 삭제 실패 (이미 삭제됨)"
+            kubectl delete secrets --all -n nestjs-app-staging || echo "시크릿 삭제 실패"
+            kubectl delete configmaps --all -n nestjs-app-staging || echo "컨피그맵 삭제 실패"
+            
+            # 네임스페이스 삭제
+            kubectl delete namespace nestjs-app-staging || echo "네임스페이스 삭제 실패"
+            
+            echo "✅ 스테이징 환경 정리 완료"
+          else
+            echo "ℹ️ 스테이징 네임스페이스가 존재하지 않습니다"
+          fi
+
+      - name: Cleanup ECR staging images
+        run: |
+          echo "🗑️ 스테이징 이미지 정리 중..."
+          
+          # PR 관련 이미지 태그 목록 조회
+          PR_NUMBER=${{ github.event.number }}
+          
+          # ECR에서 PR 관련 이미지 삭제 (최근 5개 제외하고)
+          aws ecr list-images \
+            --repository-name nestjs-app \
+            --filter tagStatus=TAGGED \
+            --query "imageIds[?starts_with(imageTag, 'pr-${PR_NUMBER}-')]" \
+            --output json | \
+          jq -r '.[5:] | .[] | .imageDigest' | \
+          while read digest; do
+            if [ ! -z "$digest" ]; then
+              aws ecr batch-delete-image \
+                --repository-name nestjs-app \
+                --image-ids imageDigest=$digest || echo "이미지 삭제 실패: $digest"
+            fi
+          done
+          
+          echo "✅ 스테이징 이미지 정리 완료"

@@ -11,13 +11,18 @@ metadata:
     alb.ingress.kubernetes.io/ssl-redirect: '443'
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:863518449560:certificate/b9aec76a-3962-418e-a03a-4827ef59dd4c
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
-    # 기존 ALB와 동일한 이름으로 생성되도록 설정
-    alb.ingress.kubernetes.io/load-balancer-name: pick-px-alb-eks
+    # 기존 ALB 이름과 동일하게 설정하여 대체
+    alb.ingress.kubernetes.io/load-balancer-name: pick-px-alb
+    # 헬스체크 경로를 /health로 설정
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
 spec:
   rules:
-  # WebSocket 도메인 (직접 접근)
-  - host: ws.pick-px.com
-    http:
+  # 모든 트래픽을 NestJS 서비스로 라우팅
+  - http:
       paths:
       - path: /
         pathType: Prefix
