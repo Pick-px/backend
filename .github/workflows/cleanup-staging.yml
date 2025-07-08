@@ -29,6 +29,10 @@ jobs:
           if kubectl get namespace nestjs-app-staging > /dev/null 2>&1; then
             echo "📦 스테이징 리소스 삭제 중..."
             
+            # 네임스페이스 라벨 정보 출력
+            echo "📋 네임스페이스 정보:"
+            kubectl get namespace nestjs-app-staging --show-labels
+            
             # 모든 리소스 삭제
             kubectl delete all --all -n nestjs-app-staging || echo "리소스 삭제 실패 (이미 삭제됨)"
             kubectl delete secrets --all -n nestjs-app-staging || echo "시크릿 삭제 실패"
@@ -41,6 +45,32 @@ jobs:
           else
             echo "ℹ️ 스테이징 네임스페이스가 존재하지 않습니다"
           fi
+
+      - name: Cleanup old staging namespaces (TTL based)
+        run: |
+          echo "🕐 TTL 기반 오래된 스테이징 환경 정리..."
+          
+          # 현재 Unix 타임스탬프
+          CURRENT_TIME=$(date +%s)
+          
+          # TTL이 지난 네임스페이스 찾기
+          kubectl get namespaces -l staging.cleanup/ttl-unix --no-headers | while read namespace rest; do
+            TTL_UNIX=$(kubectl get namespace $namespace -o jsonpath='{.metadata.labels.staging\.cleanup/ttl-unix}' 2>/dev/null || echo "")
+            
+            if [ ! -z "$TTL_UNIX" ] && [ "$CURRENT_TIME" -gt "$TTL_UNIX" ]; then
+              echo "⏰ TTL 만료된 네임스페이스 발견: $namespace"
+              
+              # 리소스 삭제
+              kubectl delete all --all -n $namespace || echo "리소스 삭제 실패"
+              kubectl delete secrets --all -n $namespace || echo "시크릿 삭제 실패"
+              kubectl delete configmaps --all -n $namespace || echo "컨피그맵 삭제 실패"
+              
+              # 네임스페이스 삭제
+              kubectl delete namespace $namespace || echo "네임스페이스 삭제 실패: $namespace"
+              
+              echo "✅ 만료된 스테이징 환경 정리 완료: $namespace"
+            fi
+          done
 
       - name: Cleanup ECR staging images
         run: |

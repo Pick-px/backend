@@ -206,10 +206,15 @@ jobs:
             kubectl apply -f -
             
             # 스테이징 환경에 TTL 라벨 추가 (24시간 후 정리 대상)
+            # Unix 타임스탬프 사용 (콜론 없음)
+            TTL_TIMESTAMP=$(date -d '+24 hours' +%s)
             kubectl label namespace $NAMESPACE \
-              staging.cleanup/ttl=$(date -d '+24 hours' -u +%Y-%m-%dT%H:%M:%SZ) \
+              staging.cleanup/ttl-unix=$TTL_TIMESTAMP \
               staging.cleanup/pr-number=${{ github.event.number }} \
+              staging.cleanup/created-date=$(date +%Y-%m-%d) \
               --overwrite
+            
+            echo "✅ 스테이징 네임스페이스 TTL 설정: $(date -d '+24 hours')"
           else
             echo "📁 프로덕션 네임스페이스 생성..."
             kubectl apply -f k8s/namespace.yaml

@@ -9,31 +9,31 @@ const cookieParser = require('cookie-parser');
 dotenv.config();
 
 async function bootstrap() {
-  // 환경변수 검증
-  const requiredEnvVars = ['JWT_SECRET'];
+  // // 환경변수 검증
+  // const requiredEnvVars = ['JWT_SECRET'];
 
-  // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수
-  if (process.env.NODE_ENV === 'production') {
-    requiredEnvVars.push('DATABASE_URL', 'REDIS_URL');
-  }
+  // // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수
+  // if (process.env.NODE_ENV === 'production') {
+  //   requiredEnvVars.push('DATABASE_URL', 'REDIS_URL');
+  // }
 
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      console.error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
-      // 프로덕션에서는 에러로 종료하지만, 개발환경에서는 경고만 출력
-      if (process.env.NODE_ENV === 'production') {
-        process.exit(1);
-      }
-    }
-  }
+  // for (const envVar of requiredEnvVars) {
+  //   if (!process.env[envVar]) {
+  //     console.error(`❌ 환경변수 ${envVar}이 설정되지 않았습니다.`);
+  //     // 프로덕션에서는 에러로 종료하지만, 개발환경에서는 경고만 출력
+  //     if (process.env.NODE_ENV === 'production') {
+  //       process.exit(1);
+  //     }
+  //   }
+  // }
 
-  console.log('🔧 환경변수 검증 완료');
-  console.log(`📍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔑 JWT_SECRET: ${process.env.JWT_SECRET ? '설정됨' : '미설정'}`);
-  console.log(
-    `🗄️ DATABASE_URL: ${process.env.DATABASE_URL ? '설정됨' : '미설정'}`
-  );
-  console.log(`🔴 REDIS_URL: ${process.env.REDIS_URL ? '설정됨' : '미설정'}`);
+  // console.log('🔧 환경변수 검증 완료');
+  // console.log(`📍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  // console.log(`🔑 JWT_SECRET: ${process.env.JWT_SECRET ? '설정됨' : '미설정'}`);
+  // console.log(
+  //   `🗄️ DATABASE_URL: ${process.env.DATABASE_URL ? '설정됨' : '미설정'}`
+  // );
+  // console.log(`🔴 REDIS_URL: ${process.env.REDIS_URL ? '설정됨' : '미설정'}`);
 
   const app = await NestFactory.create(AppModule);
 
