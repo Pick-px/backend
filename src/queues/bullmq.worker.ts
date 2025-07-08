@@ -123,17 +123,49 @@ async function flushChatBatch(isForceFlush: boolean = false) {
       groupId,
       userId: chatData.user.id,
       message: chatData.message,
-      createdAt: chatData.created_at,
-      updatedAt: chatData.created_at
+      createdAt: new Date(chatData.created_at)
     }));
     
     await chatRepo.save(chatsToInsert);
     const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
     console.log(`[Worker] 채팅 ${flushType} 완료: 개수=${chatBatchQueue.length}`);
+
+    // === flush 후 groupId별로 레디스 동기화 (병렬 처리) ===
+    const groupIds = [...new Set(chatBatchQueue.map(({ groupId }) => groupId))];
+    await Promise.all(groupIds.map(groupId => syncRedisChatAfterFlush(groupId)));
+
     chatBatchQueue.length = 0; // 배열 비우기
   } catch (error) {
     console.error(`[Worker] 채팅 배치 flush 에러:`, error);
   }
+}
+
+// === flush 후 groupId별로 레디스 동기화 함수 ===
+async function syncRedisChatAfterFlush(groupId: number) {
+  const chatRepo = AppDataSource.getRepository(Chat);
+  // 최신 50개 채팅을 DB에서 조회
+  const chats = await chatRepo.find({
+    where: { groupId },
+    order: { createdAt: 'DESC' },
+    take: 50,
+    relations: ['user'],
+  });
+  const chatKey = `chat:${Number(groupId)}`;
+  // Redis에 저장할 포맷으로 변환
+  const chatPayloads = chats.map(chat => ({
+    id: chat.id,
+    user: { id: chat.user.id, user_name: chat.user.userName },
+    message: chat.message,
+    created_at: chat.createdAt.toISOString(),
+  }));
+  // Redis에 저장(기존 데이터 삭제 후)
+  await redis.del(chatKey);
+  if (chatPayloads.length > 0) {
+    await redis.lpush(chatKey, ...chatPayloads.map(p => JSON.stringify(p)));
+    await redis.ltrim(chatKey, 0, 49);
+    await redis.expire(chatKey, 12 * 60 * 60);
+  }
+  console.log('[동기화] groupId', groupId, '레디스 채팅 개수', chatPayloads.length);
 }
 
 // 주기적 강제 flush (안전장치)
