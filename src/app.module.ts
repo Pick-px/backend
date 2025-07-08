@@ -56,6 +56,7 @@ import { AppGateway } from './app.gateway';
             database: configService.get<string>('POSTGRES_DB'),
             autoLoadEntities: true,
             entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            synchronize: false, // 개발에서도 false로 설정
           };
         }
       },
