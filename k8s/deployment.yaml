@@ -7,9 +7,15 @@ metadata:
     app: nestjs-app
 spec:
   replicas: 2
+  revisionHistoryLimit: 1  # 오래된 ReplicaSet 1개만 유지
   selector:
     matchLabels:
       app: nestjs-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1      # 동시에 1개만 종료
+      maxSurge: 1           # 동시에 1개만 추가 생성
   template:
     metadata:
       labels:
@@ -23,6 +29,13 @@ spec:
           env:
             - name: NODE_ENV
               value: 'production'
+            - name: PORT
+              value: '3000'
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: jwt-secret
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -35,20 +48,24 @@ spec:
                   key: redis-url
           resources:
             requests:
-              memory: '256Mi'
-              cpu: '250m'
+              memory: '256Mi'    # 512Mi → 256Mi로 감소
+              cpu: '250m'        # 500m → 250m으로 감소  
             limits:
-              memory: '512Mi'
-              cpu: '500m'
+              memory: '512Mi'    # 1Gi → 512Mi로 감소
+              cpu: '500m'        # 1000m → 500m으로 감소
           livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
             httpGet:
               path: /health
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
