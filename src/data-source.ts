@@ -8,44 +8,11 @@ import { Group } from './group/entity/group.entity';
 import { Chat } from './group/entity/chat.entity';
 import { GroupUser } from './entity/GroupUser.entity';
 import * as dotenv from 'dotenv';
-import * as fs from 'fs';
-import * as path from 'path';
 
 dotenv.config();
 
 console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
 console.log('[DB] DATABASE_URL 존재:', !!process.env.DATABASE_URL);
-
-// SSL 설정 함수
-const getSSLConfig = () => {
-  if (process.env.NODE_ENV !== 'production') {
-    return false;
-  }
-
-  // CA 인증서 파일 경로들
-  const caPaths = [
-    '/app/certs/ap-northeast-2-bundle.pem',
-    '/app/certs/global-bundle.pem',
-  ];
-
-  // 사용 가능한 CA 인증서 찾기
-  for (const caPath of caPaths) {
-    if (fs.existsSync(caPath)) {
-      console.log(`[DB] CA 인증서 사용: ${caPath}`);
-      return {
-        rejectUnauthorized: true,
-        ca: fs.readFileSync(caPath).toString(),
-      };
-    }
-  }
-
-  console.log(
-    '[DB] CA 인증서 파일을 찾을 수 없음, rejectUnauthorized: false 사용'
-  );
-  return {
-    rejectUnauthorized: false,
-  };
-};
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -53,7 +20,7 @@ export const AppDataSource = new DataSource({
     ? {
         // 프로덕션: DATABASE_URL 사용
         url: process.env.DATABASE_URL,
-        ssl: getSSLConfig(),
+        ssl: false, // SSL 명시적 비활성화
       }
     : {
         // 로컬 개발: 기존 설정 사용
@@ -62,6 +29,7 @@ export const AppDataSource = new DataSource({
         username: process.env.POSTGRES_USER,
         password: process.env.POSTGRES_PASSWORD,
         database: process.env.POSTGRES_DB,
+        ssl: false, // SSL 명시적 비활성화
       }),
   entities: [Canvas, Pixel, UserCanvas, User, Group, Chat, GroupUser],
   synchronize: false,

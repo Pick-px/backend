@@ -120,16 +120,16 @@ jobs:
           kubectl create secret generic app-secrets \
             --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
             --from-literal=database-url="${{ secrets.DATABASE_URL }}" \
-            --from-literal=postgres-host="pick-px-postgres.czcs262ucewo.ap-northeast-2.rds.amazonaws.com" \
+            --from-literal=postgres-host="pick-px-postgres-nossl.czcs262ucewo.ap-northeast-2.rds.amazonaws.com" \
             --from-literal=postgres-port="5432" \
             --from-literal=postgres-user="pick_px" \
             --from-literal=postgres-password="${{ secrets.POSTGRES_PASSWORD }}" \
             --from-literal=postgres-db="nestjs_db" \
-            --from-literal=postgres-ssl="true" \
+            --from-literal=postgres-ssl="false" \
             --from-literal=redis-url="${{ secrets.REDIS_URL }}" \
-            --from-literal=redis-host="pick-px-valkey-new-bu00mo.serverless.apn2.cache.amazonaws.com" \
+            --from-literal=redis-host="pick-px-redis-cluster-001.bu00mo.0001.apn2.cache.amazonaws.com" \
             --from-literal=redis-port="6379" \
-            --from-literal=redis-tls="true" \
+            --from-literal=redis-tls="false" \
             --namespace=$NAMESPACE \
             --dry-run=client -o yaml | kubectl apply -f -
 
