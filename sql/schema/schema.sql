@@ -1,4 +1,4 @@
-\connect pick_px;
+\connect nestjs_db;
 
 create table if not exists users
 (
