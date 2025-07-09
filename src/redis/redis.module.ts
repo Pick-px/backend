@@ -30,26 +30,35 @@ useFactory: (configService: ConfigService) => {
 
 // === Redis 클라이언트 팩토리 함수 (통합 버전) ===
 const createRedisClient = (configService: ConfigService): Redis => {
+  const redisUrl = configService.get<string>('REDIS_URL');
   const host = configService.get<string>('REDIS_HOST') || 'redis';
   const port = configService.get<number>('REDIS_PORT') || 6379;
   const password = configService.get<string>('REDIS_PASSWORD') || '';
   const db = configService.get<number>('REDIS_DB') || 0;
-  const redisUrl = configService.get<string>('REDIS_URL');
 
   let redis: Redis;
 
   if (redisUrl) {
-    // 프로덕션: REDIS_URL 사용 (TLS 지원)
+    // 프로덕션: REDIS_URL 사용 (ElastiCache Serverless with TLS)
+    console.log('[Redis] REDIS_URL을 사용하여 연결 시도');
     redis = new Redis(redisUrl, {
-      tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+      tls: redisUrl.startsWith('rediss://') ? {
+        // ElastiCache Serverless TLS 설정
+        rejectUnauthorized: false,
+      } : undefined,
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
-        const delay = Math.min(times * 100, 3000); // 최대 3초 대기
+        const delay = Math.min(times * 100, 3000);
+        console.log(`[Redis] 재연결 시도 ${times}회, ${delay}ms 후 재시도`);
         return delay;
       },
+      lazyConnect: true,
+      connectTimeout: 10000,
+      commandTimeout: 5000,
     });
   } else {
     // 로컬 개발: 기존 설정 사용
+    console.log(`[Redis] 개별 환경변수 사용: ${host}:${port}`);
     redis = new Redis({
       host,
       port,

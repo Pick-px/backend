@@ -1,34 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nestjs-app
+  name: nestjs-worker
   namespace: nestjs-app
   labels:
-    app: nestjs-app
+    app: nestjs-worker
 spec:
-  replicas: 2
-  revisionHistoryLimit: 1
+  replicas: 1
   selector:
     matchLabels:
-      app: nestjs-app
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
+      app: nestjs-worker
   template:
     metadata:
       labels:
-        app: nestjs-app
+        app: nestjs-worker
     spec:
       containers:
-        - name: nestjs-app
+        - name: nestjs-worker
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
-          ports:
-            - containerPort: 3000
+          command: ["npm", "run", "start:worker"]
           env:
             - name: NODE_ENV
               value: 'production'
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: jwt-secret
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -98,19 +96,19 @@ spec:
           resources:
             requests:
               memory: '256Mi'
-              cpu: '250m'
+              cpu: '200m'
             limits:
               memory: '512Mi'
-              cpu: '500m'
+              cpu: '400m'
+          # Worker 프로세스 상태 확인을 위한 probe
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 5
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "ps aux | grep -v grep | grep 'bullmq.worker' || exit 1"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+      restartPolicy: Always
