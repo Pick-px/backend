@@ -58,7 +58,7 @@ export class CanvasGateway {
     }
     try {
       const result: DrawPixelResponse =
-        await this.canvasService.applyDrawPixelForSimulation({
+        await this.canvasService.applyDrawPixelWithCooldown({
           ...pixel,
           userId,
         });
