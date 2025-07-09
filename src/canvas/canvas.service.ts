@@ -30,7 +30,7 @@ export class CanvasService {
     private readonly dataSource: DataSource
   ) {}
 
-  // 픽셀 저장 로직 (Redis Hash 사용)
+  // 픽셀 저장 로직 (Redis Hash 사용 + Pipeline 최적화)
   async tryDrawPixel({
     canvas_id,
     x,
@@ -46,14 +46,13 @@ export class CanvasService {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
 
-      // Redis Hash에 픽셀 저장
-      await this.redisClient.hset(hashKey, field, color);
+      // Pipeline으로 3개 명령을 한 번에 처리
+      const pipeline = this.redisClient.pipeline();
+      pipeline.hset(hashKey, field, color);
+      pipeline.expire(hashKey, 3 * 24 * 60 * 60);
+      pipeline.sadd(`dirty_pixels:${canvas_id}`, field);
 
-      // Hash 전체에 TTL 설정 (3일)
-      await this.redisClient.expire(hashKey, 3 * 24 * 60 * 60);
-
-      // 워커를 위한 dirty_pixels set에 추가 (DB flush용)
-      await this.redisClient.sadd(`dirty_pixels:${canvas_id}`, `${x}:${y}`);
+      await pipeline.exec();
 
       console.log(`Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color}`);
       return true;
@@ -247,7 +246,7 @@ export class CanvasService {
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
-    const ttl = 1000; // 락 유지 시간(ms)
+    const ttl = 20; // 락 유지 시간(ms)
 
     // Redis NX 락 시도
     const is_locked = await this.redisClient.set(
@@ -356,6 +355,55 @@ export class CanvasService {
     if (result) {
       await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
       return { success: true, cooldown: cooldownSeconds };
+    } else {
+      return { success: false, message: '픽셀 저장 실패' };
+    }
+  }
+
+  // 쿨다운 적용 픽셀 그리기 for simulation
+  async applyDrawPixelForSimulation({
+    canvas_id,
+    x,
+    y,
+    color,
+    userId,
+  }: {
+    canvas_id: string;
+    x: number;
+    y: number;
+    color: string;
+    userId: number;
+  }): Promise<DrawPixelResponse> {
+    // const cooldownKey = `cooldown:${userId}:${canvas_id}`;
+    // const cooldownSeconds = 5;
+
+    // // 남은 쿨다운 확인 (Redis TTL 사용)
+    // const ttl = await this.redisClient.ttl(cooldownKey);
+
+    // if (ttl > 0) {
+    //   return { success: false, message: '쿨다운 중', remaining: ttl };
+    // }
+
+    // 동시성 제어 포함 픽셀 그리기 적용
+    const result = await this.applyDrawPixel({
+      canvas_id,
+      x,
+      y,
+      color,
+      userId,
+    });
+
+    // // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
+    // try {
+    //   await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+    // } catch (error) {
+    //   console.error('사용자 캔버스 카운트 증가 실패:', error);
+    //   // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
+    // }
+
+    if (result) {
+      // await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
+      return { success: true, message: '픽셀 저장 성공' };
     } else {
       return { success: false, message: '픽셀 저장 실패' };
     }
