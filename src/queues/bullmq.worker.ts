@@ -26,7 +26,7 @@ const pixelBatchQueue: Set<string> = new Set();
 const chatBatchQueue: any[] = [];
 
 // 배치 처리 설정 (대용량 최적화)
-const PIXEL_BATCH_SIZE = 200; // 픽셀 배치 크기
+const PIXEL_BATCH_SIZE = 600; // 픽셀 배치 크기
 const CHAT_BATCH_SIZE = 100; // 채팅 배치 크기
 const BATCH_TIMEOUT_MS = 5000; // 10초
 
@@ -77,7 +77,7 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
 
   try {
     const pixelRepo = AppDataSource.getRepository(Pixel);
-    const pixelsToUpdate: Pixel[] = [];
+    const CHUNK_SIZE = 200;
 
     // 캔버스별로 그룹화
     const canvasGroups = new Map<
@@ -87,85 +87,75 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
 
     for (const pixelData of pixelBatchQueue) {
       const [canvasId, x, y, color] = pixelData.split(':');
-      if (!canvasGroups.has(Number(canvasId))) {
-        canvasGroups.set(Number(canvasId), []);
+      const cid = Number(canvasId);
+      if (!canvasGroups.has(cid)) {
+        canvasGroups.set(cid, []);
       }
-      canvasGroups.get(Number(canvasId))!.push({
+      canvasGroups.get(cid)!.push({
         x: Number(x),
         y: Number(y),
         color,
       });
     }
 
-    // 각 캔버스별로 업데이트
-    for (const [canvasId, pixels] of canvasGroups) {
-      const xys = pixels.map(({ x, y }) => ({ x, y }));
-      const existingPixels = await pixelRepo.find({
-        where: xys.map(({ x, y }) => ({ canvasId, x, y })),
-      });
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-      const pixelMap = new Map<string, Pixel>();
-      for (const pixel of existingPixels) {
-        pixelMap.set(`${pixel.x},${pixel.y}`, pixel);
-      }
+    try {
+      for (const [canvasId, pixels] of canvasGroups) {
+        // chunk 단위로 나눠서 처리
+        for (let i = 0; i < pixels.length; i += CHUNK_SIZE) {
+          const chunk = pixels.slice(i, i + CHUNK_SIZE);
 
-      for (const { x, y, color } of pixels) {
-        const key = `${x},${y}`;
-        const existingPixel = pixelMap.get(key);
-        if (existingPixel) {
-          existingPixel.color = color;
-          pixelsToUpdate.push(existingPixel);
+          const whereClauseParts: string[] = [];
+          const caseClauseParts: string[] = [];
+          const values: any[] = [];
+
+          // (canvas_id, x, y) WHERE 조건 및 파라미터
+          chunk.forEach((p, idx) => {
+            const baseIdx = idx * 3;
+            // IN 조건용 (canvas_id, x, y)
+            whereClauseParts.push(
+              `($${baseIdx + 1}, $${baseIdx + 2}, $${baseIdx + 3})`
+            );
+            values.push(canvasId, p.x, p.y);
+          });
+
+          // CASE WHEN ... THEN ... 및 색상 파라미터
+          chunk.forEach((p, idx) => {
+            const baseIdx = idx * 3;
+            const colorIdx = chunk.length * 3 + idx + 1;
+            // CASE 조건에 색상 파라미터 추가
+            caseClauseParts.push(
+              `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN $${colorIdx}`
+            );
+            values.push(p.color);
+          });
+
+          const query = `
+            UPDATE pixels
+            SET color = CASE
+              ${caseClauseParts.join('\n')}
+            END
+            WHERE (canvas_id, x, y) IN (${whereClauseParts.join(', ')})
+          `;
+
+          await queryRunner.query(query, values);
         }
       }
-    }
 
-    if (pixelsToUpdate.length > 0) {
-      const queryRunner = AppDataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
-      try {
-        // Bulk update using CASE WHEN
-        const cases: string[] = [];
-        const whereIn: string[] = [];
-        const parameters: any = {};
-
-        pixelsToUpdate.forEach((pixel, i) => {
-          const id = `p${i}`;
-          cases.push(
-            `WHEN canvas_id = :canvasId_${id} AND x = :x_${id} AND y = :y_${id} THEN :color_${id}`
-          );
-          whereIn.push(`(:canvasId_${id}, :x_${id}, :y_${id})`);
-          parameters[`canvasId_${id}`] = pixel.canvasId;
-          parameters[`x_${id}`] = pixel.x;
-          parameters[`y_${id}`] = pixel.y;
-          parameters[`color_${id}`] = pixel.color;
-        });
-
-        const caseSQL = cases.join('\n');
-        const whereSQL = whereIn.join(', ');
-
-        await queryRunner.query(
-          `
-          UPDATE pixel
-          SET color = CASE
-            ${caseSQL}
-          END
-          WHERE (canvas_id, x, y) IN (${whereSQL})
-          `,
-          parameters
-        );
-        await queryRunner.commitTransaction();
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        throw error;
-      } finally {
-        await queryRunner.release();
-      }
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
 
     const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
     console.log(
-      `[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}, 업데이트=${pixelsToUpdate.length}`
+      `[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}`
     );
     pixelBatchQueue.clear();
   } catch (error) {
@@ -183,7 +173,7 @@ async function flushChatBatch(isForceFlush: boolean = false) {
       groupId,
       userId: chatData.user.id,
       message: chatData.message,
-      createdAt: new Date(chatData.created_at)
+      createdAt: new Date(chatData.created_at),
     }));
 
     await chatRepo.save(chatsToInsert);
@@ -210,7 +200,7 @@ async function syncRedisChatAfterFlush(groupId: number) {
   });
   const chatKey = `chat:${Number(groupId)}`;
   // Redis에 저장할 포맷으로 변환
-  const chatPayloads = chats.map(chat => ({
+  const chatPayloads = chats.map((chat) => ({
     id: chat.id,
     user: { id: chat.user.id, user_name: chat.user.userName },
     message: chat.message,
@@ -219,11 +209,16 @@ async function syncRedisChatAfterFlush(groupId: number) {
   // Redis에 저장(기존 데이터 삭제 후)
   await redis.del(chatKey);
   if (chatPayloads.length > 0) {
-    await redis.lpush(chatKey, ...chatPayloads.map(p => JSON.stringify(p)));
+    await redis.lpush(chatKey, ...chatPayloads.map((p) => JSON.stringify(p)));
     await redis.ltrim(chatKey, 0, 49);
     await redis.expire(chatKey, 12 * 60 * 60);
   }
-  console.log('[동기화] groupId', groupId, '레디스 채팅 개수', chatPayloads.length);
+  console.log(
+    '[동기화] groupId',
+    groupId,
+    '레디스 채팅 개수',
+    chatPayloads.length
+  );
 }
 
 // 주기적 강제 flush (안전장치)

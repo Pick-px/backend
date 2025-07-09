@@ -135,7 +135,6 @@ export class CanvasGateway {
     @ConnectedSocket() client: Socket
   ) {
     try {
-      console.log('요청 도착:', pixel);
       const userId = pixel.user_id;
       const result: DrawPixelResponse =
         await this.canvasService.applyDrawPixelForSimulation({
