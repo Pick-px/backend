@@ -112,7 +112,7 @@ export class CanvasService {
 
     if (!realCanvasId) {
       const defaultCanvas = await this.canvasRepository.find({
-        order: { id: 'DESC' },
+        order: { id: 'ASC' },
         take: 1,
       });
       const canvas = defaultCanvas[0];
@@ -294,7 +294,7 @@ export class CanvasService {
     if (!realCanvasId) {
       // 기본 캔버스 조회
       const canvases = await this.canvasRepository.find({
-        order: { id: 'DESC' },
+        order: { id: 'ASC' },
         take: 1,
       });
       const defaultCanvas = canvases[0];
