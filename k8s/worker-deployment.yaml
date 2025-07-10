@@ -24,6 +24,19 @@ spec:
         - name: nestjs-worker
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
           command: ["node", "dist/queues/bullmq.worker.js"]
+          # 리소스 제한
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Graceful shutdown (Worker 프로세스용)
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
           env:
             - name: NODE_ENV
               value: 'production'
@@ -85,6 +98,27 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: redis-port
+            - name: REDIS_TLS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-tls
+            # Google OAuth
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-secret
+            - name: GOOGLE_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-redirect-uri
             - name: REDIS_TLS
               valueFrom:
                 secretKeyRef:

@@ -30,6 +30,36 @@ spec:
           ports:
             - containerPort: 3000
               name: http
+          # 헬스체크 설정 (무중단 배포 필수)
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          # 리소스 제한
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Graceful shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
           env:
             - name: NODE_ENV
               value: 'production'
@@ -98,6 +128,22 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: redis-tls
+            # Google OAuth
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-secret
+            - name: GOOGLE_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-redirect-uri
           resources:
             requests:
               memory: '512Mi'
