@@ -63,6 +63,10 @@ export class CanvasController {
         success: true,
         data: {
           canvas_id: '1',
+          title: '이벤트 캔버스',
+          type: 'event',
+          startedAt: '2024-07-15T00:00:00.000Z',
+          endedAt: '2024-08-01T00:00:00.000Z',
           pixels: [
             { x: 100, y: 200, color: '#ff0000' },
             { x: 101, y: 201, color: '#00ff00' },
@@ -82,19 +86,48 @@ export class CanvasController {
     @Res() res: Response,
     @Query('canvas_id') canvas_id?: string
   ) {
-    // 픽셀 데이터 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
-    const pixels = await this.canvasService.getAllPixels(canvas_id);
-
     // 실제 캔버스 정보 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
     const canvas = await this.canvasService.getCanvasById(canvas_id);
     if (!canvas?.metaData) throw new NotFoundException('캔버스가 없습니다.');
 
-    const id = canvas.canvas_id;
+    // 캔버스 활성 상태 체크
+    const now = new Date();
     const meta = canvas.metaData;
+    
+    if (meta.startedAt > now) {
+      throw new HttpException(
+        { 
+          success: false, 
+          message: '캔버스가 아직 시작되지 않았습니다.',
+          startedAt: meta.startedAt 
+        }, 
+        403
+      );
+    }
+    
+    if (meta.endedAt && meta.endedAt <= now) {
+      throw new HttpException(
+        { 
+          success: false, 
+          message: '캔버스가 이미 종료되었습니다.',
+          endedAt: meta.endedAt 
+        }, 
+        403
+      );
+    }
+
+    // 픽셀 데이터 조회 (서비스에서 canvas_id 없으면 디폴트로 처리)
+    const pixels = await this.canvasService.getAllPixels(canvas_id);
+
+    const id = canvas.canvas_id;
     const responseData = {
       success: true,
       data: {
         canvas_id: id,
+        title: meta.title,
+        type: meta.type,
+        startedAt: meta.startedAt,
+        endedAt: meta.endedAt,
         pixels,
         compression: 'gzip',
         totalPixels: pixels.length,
@@ -139,6 +172,28 @@ export class CanvasController {
 
       if (!canvasMetaData) throw new NotFoundException('캔버스 정보 없음');
       if (!canvas.canvas_id) throw new NotFoundException('캔버스 Id ');
+
+      // 캔버스 활성 상태 체크
+      const now = new Date();
+      
+      if (canvasMetaData.startedAt > now) {
+        return {
+          success: false,
+          message: '캔버스가 아직 시작되지 않았습니다.',
+          startedAt: canvasMetaData.startedAt,
+          status: 'not_started'
+        };
+      }
+      
+      if (canvasMetaData.endedAt && canvasMetaData.endedAt <= now) {
+        return {
+          success: false,
+          message: '캔버스가 이미 종료되었습니다.',
+          endedAt: canvasMetaData.endedAt,
+          status: 'ended'
+        };
+      }
+
       return {
         success: true,
         data: {
@@ -146,6 +201,7 @@ export class CanvasController {
           title: canvasMetaData.title,
           type: canvasMetaData.type,
           createdAt: canvasMetaData.createdAt,
+          startedAt: canvasMetaData.startedAt,
           endedAt: canvasMetaData.endedAt,
           sizeX: canvasMetaData.sizeX,
           sizeY: canvasMetaData.sizeY,
@@ -162,7 +218,7 @@ export class CanvasController {
 
   @ApiOperation({
     summary: '캔버스 리스트',
-    description: 'status(is_active)에 따른 캔버스 리스트 반환',
+    description: 'status(active/inactive)에 따른 캔버스 리스트 반환 (active: 종료되지 않은 모든 캔버스, inactive: 종료된 캔버스)',
   })
   @Get('list')
   async getCanvasList(@Query('status') status: string) {
@@ -171,7 +227,6 @@ export class CanvasController {
       return { canvases: result };
     } catch (err) {
       if (err instanceof HttpException) throw err;
-
       throw new InternalServerErrorException('서버 오류');
     }
   }

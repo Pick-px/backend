@@ -165,12 +165,25 @@ export class CanvasService {
 
   async getCanvasList(status: string) {
     try {
-      const bool: boolean = status === 'active' ? true : false;
-      const result: CanvasInfo[] = await this.dataSource.query(
-        `select id as "canvasId", title, type, created_at, ended_at, size_x, size_y from canvases where is_active = $1::boolean`,
-        [bool]
-      );
-      return result;
+      if (status === 'active') {
+        // 종료되지 않은 모든 캔버스 (시작 전 + 종료 전)
+        const result: CanvasInfo[] = await this.dataSource.query(
+          `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
+           from canvases 
+           where (ended_at IS NULL OR ended_at > NOW())`,
+          []
+        );
+        return result;
+      } else {
+        // 종료된 캔버스만
+        const result: CanvasInfo[] = await this.dataSource.query(
+          `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
+           from canvases 
+           where ended_at IS NOT NULL AND ended_at <= NOW()`,
+          []
+        );
+        return result;
+      }
     } catch (err) {
       throw new NotFoundException('DB에서 조회 실패!');
     }
@@ -178,7 +191,7 @@ export class CanvasService {
 
   // 캔버스 생성 함수 refactor 필수
   async createCanvas(createCanvasDto: createCanvasDto): Promise<Canvas | null> {
-    const { title, type, size_x, size_y, endedAt } = createCanvasDto;
+    const { title, type, size_x, size_y, startedAt, endedAt } = createCanvasDto;
 
     // 캔버스 엔티티 생성
     const canvas = this.canvasRepository.create({
@@ -187,8 +200,8 @@ export class CanvasService {
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),
+      startedAt: startedAt,
       endedAt: endedAt,
-      is_active: true,
     });
 
     try {

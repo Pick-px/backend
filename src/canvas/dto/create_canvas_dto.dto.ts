@@ -37,8 +37,16 @@ export class createCanvasDto {
 
   @ApiProperty({
     example: '2024-01-01T00:00:00.000Z',
-    description:
-      '캔버스 종료일입니다. Date 값으로 받습니다. 상시 캔버스인 경우 그냥 null로 보내도 됩니다.',
+    description: '캔버스 시작일 (ISO8601 형식)',
+  })
+  @IsNotEmpty()
+  @IsDate()
+  startedAt: Date;
+
+  @ApiProperty({
+    example: '2024-12-31T23:59:59.000Z',
+    description: '캔버스 종료일 (ISO8601 형식, 상시 캔버스는 null 가능)',
+    required: false,
   })
   @IsDate()
   endedAt: Date;
