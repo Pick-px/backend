@@ -20,7 +20,7 @@ export const AppDataSource = new DataSource({
     ? {
         // 프로덕션: DATABASE_URL 사용
         url: process.env.DATABASE_URL,
-        ssl: false, // SSL 명시적 비활성화
+        ssl: { rejectUnauthorized: false },
       }
     : {
         // 로컬 개발: 기존 설정 사용
