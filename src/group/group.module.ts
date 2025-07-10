@@ -12,6 +12,7 @@ import { UserModule } from '../user/user.module';
 import { PassportModule } from '@nestjs/passport';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../redis/redis.module';
+import { AwsModule } from '../aws/aws.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RedisModule } from '../redis/redis.module';
     PassportModule,
     forwardRef(() => AuthModule),
     RedisModule,
+    AwsModule,
   ],
   providers: [GroupService, GroupGateway],
   controllers: [GroupController],

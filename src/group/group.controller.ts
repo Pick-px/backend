@@ -23,7 +23,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupIdDto } from './dto/group-id.dto';
 import { QuitGroupDto } from './dto/quit-group.dto';
@@ -32,6 +32,7 @@ import { ChatHistoryResponseDto } from './dto/chat-history-response.dto';
 import { BaseResponseDto } from 'src/dto/base.dto';
 import { UserService } from '../user/user.service';
 import { AuthRequest } from '../interface/AuthRequest.interface';
+import { CreatePreSignedUrl } from './dto/create_url.dto';
 
 @ApiTags('Group')
 @Controller('api/group')
@@ -465,6 +466,21 @@ export class GroupController {
         },
         HttpStatus.NOT_FOUND
       );
+    }
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard)
+  async uploadOverlayImg(
+    @Req() req: AuthRequest,
+    @Body() createUrl: CreatePreSignedUrl
+  ) {
+    try {
+      const userId = req.user?._id;
+
+      return await this.groupService.getPresignedURL(createUrl, userId);
+    } catch (err) {
+      console.log(err);
     }
   }
 }

@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Express } from 'express';
 import * as dotenv from 'dotenv';
+import { ValidationPipe } from '@nestjs/common';
 const cookieParser = require('cookie-parser');
 
 dotenv.config();
@@ -30,6 +31,7 @@ async function bootstrap() {
   expressApp.set('trust proxy', 1);
   app.use(cookieParser(secret));
   app.useWebSocketAdapter(new IoAdapter(app));
+  app.useGlobalPipes(new ValidationPipe());
 
   try {
     const config = new DocumentBuilder()
