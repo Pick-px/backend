@@ -221,6 +221,8 @@ export class UserService {
         canvasId: uc.canvas.id,
         title: uc.canvas.title,
         created_at: uc.canvas.createdAt,
+        started_at: uc.canvas.startedAt,
+        ended_at: uc.canvas.endedAt,
         size_x: uc.canvas.sizeX,
         size_y: uc.canvas.sizeY,
       }));

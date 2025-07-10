@@ -18,6 +18,9 @@ export class Canvas {
   @Column({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
+  @Column({ type: 'timestamp', name: 'started_at', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  startedAt: Date;
+
   @Column({ type: 'timestamp', name: 'ended_at', nullable: true })
   endedAt: Date;
 
@@ -26,9 +29,6 @@ export class Canvas {
 
   @Column({ name: 'size_y' })
   sizeY: number;
-
-  @Column({ type: 'boolean', name: 'is_active' })
-  is_active: boolean;
 
   @OneToMany(() => UserCanvas, (uc) => uc.canvas)
   canvasUseres: UserCanvas[];
