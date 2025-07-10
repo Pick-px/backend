@@ -35,27 +35,73 @@ export class GroupService {
     groupId: number,
     take: number
   ): Promise<Chat[]> {
-    // Redis에서 최근 메시지만 조회 (최대 50개로 제한)
+    // Redis에서 최근 메시지 조회 (최대 50개로 제한)
     const redisChats = await this.redis.lrange(`chat:${Number(groupId)}`, 0, Math.min(take, 50) - 1);
     
-    // Redis에 있는 메시지들 파싱
-    const redisMessages = redisChats
-      .map(chatStr => JSON.parse(chatStr))
-      .filter(chat => chat.id && chat.user && chat.message) // 유효한 메시지만
-      .map(chat => ({
-        id: Number(chat.id),
-        groupId,
-        userId: chat.user.id,
-        message: chat.message,
-        createdAt: new Date(chat.created_at),
-        user: {
-          id: chat.user.id,
-          userName: chat.user.user_name
-        }
-      })) as Chat[];
+    // Redis에 데이터가 있으면 파싱해서 반환
+    if (redisChats.length > 0) {
+      const redisMessages = redisChats
+        .map(chatStr => JSON.parse(chatStr))
+        .filter(chat => chat.id && chat.user && chat.message) // 유효한 메시지만
+        .map(chat => ({
+          id: Number(chat.id),
+          groupId,
+          userId: chat.user.id,
+          message: chat.message,
+          createdAt: new Date(chat.created_at),
+          user: {
+            id: chat.user.id,
+            userName: chat.user.user_name
+          }
+        })) as Chat[];
+      
+      return redisMessages.slice(0, take);
+    }
     
-    // Redis에 있는 메시지만 반환
-    return redisMessages.slice(0, take);
+    // Redis에 데이터가 없으면 DB에서 가져와서 Redis에 캐싱
+    console.log(`[캐시 미스] 그룹 ${groupId}의 채팅을 DB에서 가져와서 Redis에 캐싱`);
+    
+    try {
+      const chatRepo = this.dataSource.getRepository(Chat);
+      const dbChats = await chatRepo.find({
+        where: { groupId },
+        order: { createdAt: 'DESC' },
+        take: 50, // 최대 50개만 가져오기
+        relations: ['user'],
+      });
+      
+      if (dbChats.length === 0) {
+        return []; // DB에도 데이터가 없으면 빈 배열 반환
+      }
+      
+      // Redis에 저장할 포맷으로 변환
+      const chatPayloads = dbChats.map((chat) => ({
+        id: chat.id,
+        user: { id: chat.user.id, user_name: chat.user.userName },
+        message: chat.message,
+        created_at: chat.createdAt.toISOString(),
+      }));
+      
+      // Redis에 캐싱 (기존 데이터 삭제 후)
+      const chatKey = `chat:${Number(groupId)}`;
+      await this.redis.del(chatKey);
+      if (chatPayloads.length > 0) {
+        await this.redis.lpush(chatKey, ...chatPayloads.map((p) => JSON.stringify(p)));
+        await this.redis.ltrim(chatKey, 0, 49); // 최대 50개만 유지
+        await this.redis.expire(chatKey, 12 * 60 * 60); // 12시간 TTL
+      }
+      
+      console.log(`[캐시 복구] 그룹 ${groupId}의 채팅 ${dbChats.length}개를 Redis에 캐싱 완료`);
+      
+      // 요청된 개수만큼 반환 (최신순으로 정렬)
+      return dbChats
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) // 오래된 순으로 정렬
+        .slice(0, take);
+        
+    } catch (error) {
+      console.error(`[캐시 복구 실패] 그룹 ${groupId}의 DB 조회 중 에러:`, error);
+      return []; // 에러 발생 시 빈 배열 반환
+    }
   }
 
   async createGroup(

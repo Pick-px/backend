@@ -83,11 +83,13 @@ export class CanvasGateway {
         })
       );
 
-      // canvas_id 방에만 브로드캐스트
-      this.server.to(pixel.canvas_id).emit('pixel_update', {
-        x: pixel.x,
-        y: pixel.y,
-        color: pixel.color,
+      // 비동기 브로드캐스트 (응답 속도 향상)
+      setImmediate(() => {
+        this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
+          x: pixel.x,
+          y: pixel.y,
+          color: pixel.color,
+        });
       });
 
       console.log(
@@ -104,7 +106,7 @@ export class CanvasGateway {
     @MessageBody() data: { canvas_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    await client.join(data.canvas_id);
+    await client.join(`canvas_${data.canvas_id}`);
     // 쿨다운 정보 자동 푸시
     const userId = this.getUserIdFromClient(client);
     if (userId && data.canvas_id) {
@@ -161,7 +163,7 @@ export class CanvasGateway {
 
       // 비동기 브로드캐스트 (응답 속도 향상)
       setImmediate(() => {
-        this.server.to(pixel.canvas_id).emit('pixel_update', {
+        this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
