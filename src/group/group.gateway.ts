@@ -72,18 +72,26 @@ export class GroupGateway {
       });
       return;
     }
-    // 기존 group_id 룸에서 leave (canvas_id 룸은 유지)
+    
+    // 이미 해당 그룹 룸에 있으면 아무것도 하지 않음
+    if (client.rooms.has(`group_${data.group_id}`)) {
+      console.log(`[GroupGateway] 이미 그룹 ${data.group_id}에 참여 중`);
+      return;
+    }
+    
+    // 기존 그룹 룸에서만 leave (캔버스 룸은 유지)
     const currentRooms = Array.from(client.rooms);
     for (const room of currentRooms) {
+      // 그룹 룸만 체크 (group_ 접두사가 있는 룸이 그룹 룸, canvas_ 룸은 유지)
       if (
         room !== client.id &&
-        room !== data.group_id &&
-        !room.startsWith('canvas_')
+        room !== `group_${data.group_id}` &&
+        room.startsWith('group_')
       ) {
         client.leave(room);
       }
     }
-    client.join(data.group_id);
+    client.join(`group_${data.group_id}`);
   }
 
   // 채팅방에서 나갈 때 호출
@@ -92,7 +100,7 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    client.leave(data.group_id);
+    client.leave(`group_${data.group_id}`);
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
@@ -125,7 +133,7 @@ export class GroupGateway {
         created_at: now.toISOString(),
       };
       // Redis에 저장 (12시간 TTL)
-      const chatKey = `chat:${body.group_id}`;
+      const chatKey = `chat:${Number(body.group_id)}`;
       await this.redis.lpush(chatKey, JSON.stringify(chatPayload));
       
       // 채팅 리스트 크기 제한 (최대 50개)
@@ -140,8 +148,10 @@ export class GroupGateway {
         chatData: chatPayload
       }));
       
-      // 브로드캐스트
-      this.server.to(body.group_id).emit('chat_message', chatPayload);
+      // 비동기 브로드캐스트 (응답 속도 향상)
+      setImmediate(() => {
+        this.server.to(`group_${body.group_id}`).emit('chat_message', chatPayload);
+      });
     } catch (error) {
       client.emit('chat_error', {
         message: '채팅 메시지 전송 중 오류가 발생했습니다.',

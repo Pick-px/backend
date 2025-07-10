@@ -5,11 +5,14 @@ metadata:
   namespace: nestjs-app
   labels:
     app: nestjs-app
+    component: api
 spec:
   selector:
     app: nestjs-app
+    component: api
   ports:
   - port: 80
     targetPort: 3000
     protocol: TCP
+    name: http
   type: ClusterIP

@@ -5,12 +5,14 @@ metadata:
   namespace: nestjs-app
   labels:
     app: nestjs-app
+    component: api
 spec:
-  replicas: 2
-  revisionHistoryLimit: 1
+  replicas: 3
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: nestjs-app
+      component: api
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,94 +22,134 @@ spec:
     metadata:
       labels:
         app: nestjs-app
+        component: api
     spec:
       containers:
         - name: nestjs-app
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
           ports:
             - containerPort: 3000
+              name: http
+          # 헬스체크 설정 (무중단 배포 필수)
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          # 리소스 제한
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Graceful shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
           env:
             - name: NODE_ENV
               value: 'production'
             - name: PORT
               value: '3000'
+            # JWT Secret
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: jwt-secret
+            # Database Connection
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: database-url
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-url
-            # Redis 개별 환경변수 (fallback용)
-            - name: REDIS_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-host
-                  optional: true
-            - name: REDIS_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-port
-                  optional: true
-            - name: REDIS_TLS
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-tls
-                  optional: true
-            # PostgreSQL 개별 환경변수 (fallback용)
             - name: POSTGRES_HOST
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-host
-                  optional: true
             - name: POSTGRES_PORT
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-port
-                  optional: true
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-user
-                  optional: true
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-password
-                  optional: true
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-db
-                  optional: true
             - name: POSTGRES_SSL
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: postgres-ssl
-                  optional: true
+            # Redis Connection
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-url
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-host
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-port
+            - name: REDIS_TLS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-tls
+            # Google OAuth
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-client-secret
+            - name: GOOGLE_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: google-redirect-uri
           resources:
             requests:
-              memory: '256Mi'
+              memory: '512Mi'
               cpu: '250m'
             limits:
-              memory: '512Mi'
+              memory: '1Gi'
               cpu: '500m'
           livenessProbe:
             httpGet:
@@ -116,7 +158,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
-            failureThreshold: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
@@ -125,3 +167,12 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+      terminationGracePeriodSeconds: 30
