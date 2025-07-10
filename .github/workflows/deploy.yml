@@ -2,9 +2,9 @@ name: Deploy NestJS to EKS
 
 on:
   push:
-    branches: [deploy]
+    branches: [main]
   pull_request:
-    branches: [deploy]
+    branches: [main]
   workflow_dispatch:
 
 env:
