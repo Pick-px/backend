@@ -182,6 +182,12 @@ async function flushChatBatch(isForceFlush: boolean = false) {
       `[Worker] 채팅 ${flushType} 완료: 개수=${chatBatchQueue.length}`
     );
 
+    // flush 후 각 그룹별로 Redis 동기화
+    const groupIds = [...new Set(chatBatchQueue.map(({ groupId }) => groupId))];
+    for (const groupId of groupIds) {
+      await syncRedisChatAfterFlush(groupId);
+    }
+
     chatBatchQueue.length = 0; // 배열 비우기
   } catch (error) {
     console.error(`[Worker] 채팅 배치 flush 에러:`, error);
