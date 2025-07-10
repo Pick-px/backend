@@ -23,10 +23,10 @@ create table if not exists canvases
     title      varchar(50) not null,
     type       varchar(50)        not null,
     created_at timestamp   not null,
+    started_at timestamp   not null default now(),
     ended_at   timestamp   not null,
     size_x     integer     not null,
     size_y     integer     not null,
-    is_active boolean default false not null,
     primary key (id)
 );
 

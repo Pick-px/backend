@@ -161,6 +161,7 @@ export class GroupController {
           groups: groups.map((g) => ({
             group_id: String(g.id),
             group_title: g.name,
+            made_by: String(g.madeBy),
           })),
           messages: messages.map((m) => ({
             messageId: m.id,
@@ -273,9 +274,21 @@ export class GroupController {
       groupIdNum,
       limitNum
     );
+    const groupInfo = await this.groupService.findGroupById(groupIdNum);
+    if (!groupInfo) {
+      throw new HttpException(
+        { success: false, error: 'Group not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
     return {
       success: true,
       data: {
+        group: {
+          group_id: String(groupInfo.id),
+          group_title: groupInfo.name,
+          made_by: String(groupInfo.madeBy),
+        },
         messages: messages.map((m) => ({
           messageId: m.id,
           user: { userId: String(m.user.id), name: m.user.userName },
