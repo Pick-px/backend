@@ -30,7 +30,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.log(`[AppGateway] 클라이언트 연결(로그인):`, user);
     } else {
       console.log(`[AppGateway] 클라이언트 연결(비로그인):`, client.id);
-      // 연결은 유지, context에 user 저장 안함
+      //   // 연결은 유지, context에 user 저장 안함
     }
   }
 
