@@ -17,6 +17,7 @@ import { Group } from './group/entity/group.entity';
 import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AppGateway } from './app.gateway';
+import { AwsModule } from './aws/aws.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { AppGateway } from './app.gateway';
     AuthModule,
     GroupModule,
     HttpModule,
+    AwsModule,
   ],
   controllers: [AppController],
   providers: [AppService, AppGateway],

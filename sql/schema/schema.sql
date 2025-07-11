@@ -84,6 +84,11 @@ create table if not exists groups
     canvas_id bigint not null,
     made_by bigint not null,
     is_default boolean not null default false,
+    url VARCHAR(1024) default null,
+    overlay_x REAL default 0.0,
+    overlay_y REAL default 0.0,
+    overlay_height REAL default 0.0,
+    overlay_width REAL default 0.0,
     primary key (id),
     unique (canvas_id, name),
     constraint fk_canvas
