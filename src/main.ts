@@ -31,7 +31,7 @@ async function bootstrap() {
   expressApp.set('trust proxy', 1);
   app.use(cookieParser(secret));
   app.useWebSocketAdapter(new IoAdapter(app));
-  app.useGlobalPipes(new ValidationPipe());
+  // app.useGlobalPipes(new ValidationPipe());
 
   try {
     const config = new DocumentBuilder()

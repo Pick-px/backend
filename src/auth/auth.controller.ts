@@ -21,7 +21,7 @@ export class AuthController {
       const userId = await this.authService.checkValidationToken(refreshToken);
       res.clearCookie('refresh_token', {
         httpOnly: true,
-        secure: true,
+        secure: false,
         sameSite: 'none',
         signed: true,
         path: '/',
@@ -33,7 +33,7 @@ export class AuthController {
 
       res.cookie('refresh_token', refresh_token, {
         httpOnly: true,
-        secure: true,
+        secure: false,
         sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
         signed: true,

@@ -93,25 +93,25 @@ export class CanvasController {
     // 캔버스 활성 상태 체크
     const now = new Date();
     const meta = canvas.metaData;
-    
+
     if (meta.startedAt > now) {
       throw new HttpException(
-        { 
-          success: false, 
+        {
+          success: false,
           message: '캔버스가 아직 시작되지 않았습니다.',
-          startedAt: meta.startedAt 
-        }, 
+          startedAt: meta.startedAt,
+        },
         403
       );
     }
-    
+
     if (meta.endedAt && meta.endedAt <= now) {
       throw new HttpException(
-        { 
-          success: false, 
+        {
+          success: false,
           message: '캔버스가 이미 종료되었습니다.',
-          endedAt: meta.endedAt 
-        }, 
+          endedAt: meta.endedAt,
+        },
         403
       );
     }
@@ -175,22 +175,22 @@ export class CanvasController {
 
       // 캔버스 활성 상태 체크
       const now = new Date();
-      
+
       if (canvasMetaData.startedAt > now) {
         return {
           success: false,
           message: '캔버스가 아직 시작되지 않았습니다.',
           startedAt: canvasMetaData.startedAt,
-          status: 'not_started'
+          status: 'not_started',
         };
       }
-      
+
       if (canvasMetaData.endedAt && canvasMetaData.endedAt <= now) {
         return {
           success: false,
           message: '캔버스가 이미 종료되었습니다.',
           endedAt: canvasMetaData.endedAt,
-          status: 'ended'
+          status: 'ended',
         };
       }
 
@@ -218,7 +218,8 @@ export class CanvasController {
 
   @ApiOperation({
     summary: '캔버스 리스트',
-    description: 'status(active/inactive)에 따른 캔버스 리스트 반환 (active: 종료되지 않은 모든 캔버스, inactive: 종료된 캔버스)',
+    description:
+      'status(active/inactive)에 따른 캔버스 리스트 반환 (active: 종료되지 않은 모든 캔버스, inactive: 종료된 캔버스)',
   })
   @Get('list')
   async getCanvasList(@Query('status') status: string) {

@@ -10,9 +10,9 @@ import {
   HttpException,
   HttpStatus,
   Delete,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
-import { ChatMessageDto } from './dto/chat-message.dto';
 import {
   ApiOkResponse,
   ApiTags,
@@ -482,18 +482,36 @@ export class GroupController {
     }
   }
 
-  @Post('upload')
   @UseGuards(JwtAuthGuard)
+  @Post('upload')
+  @ApiOperation({ summary: 'pre-signed URL 발급 API' })
+  @ApiOkResponse({
+    description: 'pre signed url 발급 성공',
+    type: BaseResponseDto,
+  })
+  @ApiBadRequestResponse({})
+  @ApiBearerAuth()
   async uploadOverlayImg(
     @Req() req: AuthRequest,
     @Body() createUrl: CreatePreSignedUrl
   ) {
     try {
       const userId = req.user?._id;
-
-      return await this.groupService.getPresignedURL(createUrl, userId);
+      return {
+        url: await this.groupService.getPresignedURL(createUrl, userId),
+      };
     } catch (err) {
       console.log(err);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new HttpException(
+        {
+          isSuccess: false,
+          message: '서버에러',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 }

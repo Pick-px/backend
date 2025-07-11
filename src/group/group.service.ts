@@ -13,6 +13,17 @@ import { User } from '../user/entity/user.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import Redis from 'ioredis';
 import { CreatePreSignedUrl } from './dto/create_url.dto';
+import { AwsService } from '../aws/aws.service';
+import { randomUUID } from 'crypto';
+import { Overlay } from '../group/dto/overlay.dto';
+
+interface OverlayData {
+  url: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
 
 @Injectable()
 export class GroupService {
@@ -22,6 +33,7 @@ export class GroupService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly awsService: AwsService,
     // === 통합 Redis 클라이언트 ===
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis
@@ -411,10 +423,63 @@ export class GroupService {
   }
 
   async getPresignedURL(url: CreatePreSignedUrl, userId: number) {
-    const { key, contentType, group_id, x, y } = url;
+    const { contentType, group_id } = url;
     const group = await this.groupRepository.findOne({
       where: { id: Number(group_id) },
     });
+    if (group === null) {
+      throw new ForbiddenException('그룹이 존재하지 않습니다.');
+    }
+    if (group.madeBy != userId) {
+      throw new ForbiddenException('그룹장이 아닙니다');
+    }
+    const realKey = `overlay/${group_id}/${randomUUID()}.${contentType}`;
+    return await this.awsService.generatePresignedUrl(realKey, contentType);
+  }
+
+  async uploadComplete(
+    group_id: string,
+    overlay: Overlay
+  ): Promise<OverlayData> {
+    const group = await this.groupRepository.findOne({
+      where: { id: Number(group_id) },
+    });
+
+    if (!group) throw new ForbiddenException('그룹이 없습니다.');
+
+    const oldURL = group.url;
+
+    if (oldURL != null) {
+      await this.awsService.deleteObject(oldURL);
+    }
+
+    const overlayData = {
+      url: overlay.url,
+      x: overlay.x,
+      y: overlay.y,
+      height: overlay.height,
+      width: overlay.width,
+    };
+
+    await this.updateGroupOverlayToDB(group, overlayData);
+    return overlayData;
+  }
+
+  async getOverlayData(group_id: string): Promise<OverlayData> {
+    const result: OverlayData = await this.dataSource.query(
+      `select url, overlay_x as x, overlay_y as y, overlay_height as height, overlay_width as width from groups where id=$1::integer`,
+      [Number(group_id)]
+    );
+    return result;
+  }
+
+  async updateGroupOverlayToDB(group: Group, overlay: OverlayData) {
+    group.url = overlay.url;
+    group.x = overlay.x || group.x;
+    group.y = overlay.y || group.y;
+    group.height = overlay.height || group.height;
+    group.width = overlay.width || group.width;
+    await this.groupRepository.save(group);
   }
 
   // 주기적 정리 시작 (6시간마다 - 부하 감소)

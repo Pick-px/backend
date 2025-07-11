@@ -27,10 +27,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     try {
       const user_id: string = payload.sub.userId;
       const user = await this.userService.findById(user_id);
-      // console.log(user);
       if (!user) {
         throw new UnauthorizedException('Invalid token');
       }
+      console.log('in validate: ', user);
       return { _id: user.id };
     } catch (err) {
       console.log(err);

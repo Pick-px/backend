@@ -45,6 +45,18 @@ export class Group {
   @Column({ name: 'url', type: 'varchar', default: null })
   url: string;
 
+  @Column({ name: 'overlay_x', type: 'decimal', default: 0.0 })
+  x: number;
+
+  @Column({ name: 'overlay_y', type: 'decimal', default: 0.0 })
+  y: number;
+
+  @Column({ name: 'overlay_height', type: 'decimal', default: 0.0 })
+  height: number;
+
+  @Column({ name: 'overlay_width', type: 'decimal', default: 0.0 })
+  width: number;
+
   @ManyToOne(() => Canvas, (canvas) => canvas.groups, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;

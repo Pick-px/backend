@@ -46,7 +46,7 @@ export class AwsService {
     key: string,
     contentType: string
   ): Promise<string> {
-    const expiresInSeconds = 5000;
+    const expiresInSeconds = 60;
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,

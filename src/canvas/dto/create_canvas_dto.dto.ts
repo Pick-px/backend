@@ -36,7 +36,7 @@ export class createCanvasDto {
   size_y: number;
 
   @ApiProperty({
-    example: '2024-01-01T00:00:00.000Z',
+    example: new Date().toISOString(),
     description: '캔버스 시작일 (ISO8601 형식)',
   })
   @IsNotEmpty()
@@ -44,7 +44,7 @@ export class createCanvasDto {
   startedAt: Date;
 
   @ApiProperty({
-    example: '2024-12-31T23:59:59.000Z',
+    example: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     description: '캔버스 종료일 (ISO8601 형식, 상시 캔버스는 null 가능)',
     required: false,
   })
