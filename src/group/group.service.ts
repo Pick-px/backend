@@ -16,6 +16,10 @@ import { CreatePreSignedUrl } from './dto/create_url.dto';
 import { AwsService } from '../aws/aws.service';
 import { randomUUID } from 'crypto';
 import { Overlay } from '../group/dto/overlay.dto';
+import {
+  constructS3PublicUrl,
+  extractKeyFromPresignedUrl,
+} from 'src/util/urlParsing.util';
 
 interface OverlayData {
   url: string;
@@ -433,7 +437,8 @@ export class GroupService {
     if (group.madeBy != userId) {
       throw new ForbiddenException('그룹장이 아닙니다');
     }
-    const realKey = `overlay/${group_id}/${randomUUID()}.${contentType}`;
+    const type = contentType.split('/')[1];
+    const realKey = `overlay/${group_id}/${randomUUID()}.${type}`;
     return await this.awsService.generatePresignedUrl(realKey, contentType);
   }
 
@@ -453,8 +458,15 @@ export class GroupService {
       await this.awsService.deleteObject(oldURL);
     }
 
+    const pathname = extractKeyFromPresignedUrl(overlay.url);
+    const objectURL = constructS3PublicUrl(
+      process.env.AWS_S3_BUCKEY!,
+      process.env.AWS_REGION!,
+      pathname
+    );
+
     const overlayData = {
-      url: overlay.url,
+      url: objectURL,
       x: overlay.x,
       y: overlay.y,
       height: overlay.height,
