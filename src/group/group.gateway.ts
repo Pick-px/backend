@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +15,13 @@ import { Group } from './entity/group.entity';
 import { Inject } from '@nestjs/common';
 import { GroupService } from './group.service';
 import { Overlay } from './dto/overlay.dto';
+import { createAdapter } from '@socket.io/redis-adapter';
+
+interface SocketUser {
+  userId?: number;
+  id?: number;
+  [key: string]: any;
+}
 
 @WebSocketGateway({
   cors: {
@@ -25,7 +33,7 @@ import { Overlay } from './dto/overlay.dto';
     credentials: true,
   },
 })
-export class GroupGateway {
+export class GroupGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -35,16 +43,33 @@ export class GroupGateway {
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
     private readonly groupService: GroupService,
-    // === 통합 Redis 클라이언트 ===
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis
   ) {}
 
-  // 헬퍼: 인증 유저 ID 추출
-  private getUserIdFromClient(client: Socket): number | null {
-    const user = (client as any).user;
-    if (!user || (!user.userId && !user.id)) return null;
-    return Number(user.userId || user.id);
+  afterInit(server: Server) {
+    // Redis Adapter 설정
+    const pubClient = this.redis;
+    const subClient = this.redis.duplicate();
+    
+    server.adapter(createAdapter(pubClient, subClient));
+    console.log('[GroupGateway] Redis Adapter 설정 완료');
+  }
+
+  // Redis 세션에서 사용자 정보 가져오기
+  private async getUserIdFromClient(client: Socket): Promise<number | null> {
+    try {
+      const sessionKey = `socket:${client.id}:user`;
+      const userData = await this.redis.get(sessionKey);
+      
+      if (!userData) return null;
+      
+      const user = JSON.parse(userData) as SocketUser;
+      return Number(user.userId || user.id);
+    } catch (error) {
+      console.error('[GroupGateway] 사용자 세션 조회 중 에러:', error);
+      return null;
+    }
   }
 
   // 헬퍼: 그룹 멤버십 체크
@@ -64,7 +89,7 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    const userId = this.getUserIdFromClient(client);
+    const userId = await this.getUserIdFromClient(client);
     if (!userId) {
       client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
       return;
@@ -99,7 +124,9 @@ export class GroupGateway {
         client.leave(room);
       }
     }
+    
     client.join(`group_${data.group_id}`);
+    
     const overlay = await this.groupService.getOverlayData(data.group_id);
     if (overlay.url != null)
       this.server.to(`group_${data.group_id}`).emit('send_img', overlay);
@@ -111,7 +138,9 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
+    const userId = await this.getUserIdFromClient(client);
     client.leave(`group_${data.group_id}`);
+    
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
@@ -121,7 +150,7 @@ export class GroupGateway {
     @ConnectedSocket() client: Socket
   ) {
     try {
-      const userId = this.getUserIdFromClient(client);
+      const userId = await this.getUserIdFromClient(client);
       if (!userId) {
         client.emit('auth_error', {
           message: '인증 정보가 올바르지 않습니다.',
