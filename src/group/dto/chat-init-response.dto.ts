@@ -12,6 +12,12 @@ export class GroupInfoDto {
     description: '그룹 제목',
   })
   group_title: string;
+
+  @ApiProperty({
+    example: '123',
+    description: '그룹 방장(생성자) ID',
+  })
+  made_by: string;
 }
 
 export class ChatMessageResponseDto {

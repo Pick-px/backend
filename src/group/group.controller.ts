@@ -10,9 +10,9 @@ import {
   HttpException,
   HttpStatus,
   Delete,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
-import { ChatMessageDto } from './dto/chat-message.dto';
 import {
   ApiOkResponse,
   ApiTags,
@@ -23,7 +23,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupIdDto } from './dto/group-id.dto';
 import { QuitGroupDto } from './dto/quit-group.dto';
@@ -32,6 +32,7 @@ import { ChatHistoryResponseDto } from './dto/chat-history-response.dto';
 import { BaseResponseDto } from 'src/dto/base.dto';
 import { UserService } from '../user/user.service';
 import { AuthRequest } from '../interface/AuthRequest.interface';
+import { CreatePreSignedUrl } from './dto/create_url.dto';
 
 @ApiTags('Group')
 @Controller('api/group')
@@ -161,6 +162,7 @@ export class GroupController {
           groups: groups.map((g) => ({
             group_id: String(g.id),
             group_title: g.name,
+            made_by: String(g.madeBy),
           })),
           messages: messages.map((m) => ({
             messageId: m.id,
@@ -273,9 +275,21 @@ export class GroupController {
       groupIdNum,
       limitNum
     );
+    const groupInfo = await this.groupService.findGroupById(groupIdNum);
+    if (!groupInfo) {
+      throw new HttpException(
+        { success: false, error: 'Group not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
     return {
       success: true,
       data: {
+        group: {
+          group_id: String(groupInfo.id),
+          group_title: groupInfo.name,
+          made_by: String(groupInfo.madeBy),
+        },
         messages: messages.map((m) => ({
           messageId: m.id,
           user: { userId: String(m.user.id), name: m.user.userName },
@@ -464,6 +478,39 @@ export class GroupController {
           message: '그룹 검색에 실패하였습니다.',
         },
         HttpStatus.NOT_FOUND
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upload')
+  @ApiOperation({ summary: 'pre-signed URL 발급 API' })
+  @ApiOkResponse({
+    description: 'pre signed url 발급 성공',
+    type: BaseResponseDto,
+  })
+  @ApiBadRequestResponse({})
+  @ApiBearerAuth()
+  async uploadOverlayImg(
+    @Req() req: AuthRequest,
+    @Body() createUrl: CreatePreSignedUrl
+  ) {
+    try {
+      const userId = req.user?._id;
+      return {
+        url: await this.groupService.getPresignedURL(createUrl, userId),
+      };
+    } catch (err) {
+      console.log(err);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new HttpException(
+        {
+          isSuccess: false,
+          message: '서버에러',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

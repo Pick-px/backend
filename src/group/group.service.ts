@@ -12,6 +12,22 @@ import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import Redis from 'ioredis';
+import { CreatePreSignedUrl } from './dto/create_url.dto';
+import { AwsService } from '../aws/aws.service';
+import { randomUUID } from 'crypto';
+import { Overlay } from '../group/dto/overlay.dto';
+import {
+  constructS3PublicUrl,
+  extractKeyFromPresignedUrl,
+} from 'src/util/urlParsing.util';
+
+interface OverlayData {
+  url: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
 
 @Injectable()
 export class GroupService {
@@ -21,6 +37,7 @@ export class GroupService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly awsService: AwsService,
     // === 통합 Redis 클라이언트 ===
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis
@@ -36,14 +53,18 @@ export class GroupService {
     take: number
   ): Promise<Chat[]> {
     // Redis에서 최근 메시지 조회 (최대 50개로 제한)
-    const redisChats = await this.redis.lrange(`chat:${Number(groupId)}`, 0, Math.min(take, 50) - 1);
-    
+    const redisChats = await this.redis.lrange(
+      `chat:${Number(groupId)}`,
+      0,
+      Math.min(take, 50) - 1
+    );
+
     // Redis에 데이터가 있으면 파싱해서 반환
     if (redisChats.length > 0) {
       const redisMessages = redisChats
-        .map(chatStr => JSON.parse(chatStr))
-        .filter(chat => chat.id && chat.user && chat.message) // 유효한 메시지만
-        .map(chat => ({
+        .map((chatStr) => JSON.parse(chatStr))
+        .filter((chat) => chat.id && chat.user && chat.message) // 유효한 메시지만
+        .map((chat) => ({
           id: Number(chat.id),
           groupId,
           userId: chat.user.id,
@@ -51,16 +72,18 @@ export class GroupService {
           createdAt: new Date(chat.created_at),
           user: {
             id: chat.user.id,
-            userName: chat.user.user_name
-          }
+            userName: chat.user.user_name,
+          },
         })) as Chat[];
-      
+
       return redisMessages.slice(0, take);
     }
-    
+
     // Redis에 데이터가 없으면 DB에서 가져와서 Redis에 캐싱
-    console.log(`[캐시 미스] 그룹 ${groupId}의 채팅을 DB에서 가져와서 Redis에 캐싱`);
-    
+    console.log(
+      `[캐시 미스] 그룹 ${groupId}의 채팅을 DB에서 가져와서 Redis에 캐싱`
+    );
+
     try {
       const chatRepo = this.dataSource.getRepository(Chat);
       const dbChats = await chatRepo.find({
@@ -69,11 +92,11 @@ export class GroupService {
         take: 50, // 최대 50개만 가져오기
         relations: ['user'],
       });
-      
+
       if (dbChats.length === 0) {
         return []; // DB에도 데이터가 없으면 빈 배열 반환
       }
-      
+
       // Redis에 저장할 포맷으로 변환
       const chatPayloads = dbChats.map((chat) => ({
         id: chat.id,
@@ -81,25 +104,35 @@ export class GroupService {
         message: chat.message,
         created_at: chat.createdAt.toISOString(),
       }));
-      
+
       // Redis에 캐싱 (기존 데이터 삭제 후)
       const chatKey = `chat:${Number(groupId)}`;
       await this.redis.del(chatKey);
       if (chatPayloads.length > 0) {
-        await this.redis.lpush(chatKey, ...chatPayloads.map((p) => JSON.stringify(p)));
+        await this.redis.lpush(
+          chatKey,
+          ...chatPayloads.map((p) => JSON.stringify(p))
+        );
         await this.redis.ltrim(chatKey, 0, 49); // 최대 50개만 유지
         await this.redis.expire(chatKey, 12 * 60 * 60); // 12시간 TTL
       }
-      
-      console.log(`[캐시 복구] 그룹 ${groupId}의 채팅 ${dbChats.length}개를 Redis에 캐싱 완료`);
-      
+
+      console.log(
+        `[캐시 복구] 그룹 ${groupId}의 채팅 ${dbChats.length}개를 Redis에 캐싱 완료`
+      );
+
       // 요청된 개수만큼 반환 (최신순으로 정렬)
       return dbChats
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) // 오래된 순으로 정렬
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        ) // 오래된 순으로 정렬
         .slice(0, take);
-        
     } catch (error) {
-      console.error(`[캐시 복구 실패] 그룹 ${groupId}의 DB 조회 중 에러:`, error);
+      console.error(
+        `[캐시 복구 실패] 그룹 ${groupId}의 DB 조회 중 에러:`,
+        error
+      );
       return []; // 에러 발생 시 빈 배열 반환
     }
   }
@@ -228,11 +261,11 @@ export class GroupService {
       where: { id: _id },
     });
     if (!user) throw new NotFoundException('유저가 존재하지 않습니다.');
-    
+
     // 그룹 삭제
     if (Number(group.madeBy) === Number(user.id)) {
       await this.groupRepository.remove(group);
-      
+
       // 그룹 삭제 시 Redis 채팅도 즉시 삭제
       try {
         await this.redis.del(`chat:${group_id}`);
@@ -364,39 +397,110 @@ export class GroupService {
     try {
       // 모든 채팅 키 조회
       const chatKeys = await this.redis.keys('chat:*');
-      
+
       if (chatKeys.length === 0) {
         return; // 정리할 게 없으면 조기 종료
       }
-      
+
       console.log(`[정리] 총 ${chatKeys.length}개의 채팅 키 발견`);
-      
+
       let cleanedCount = 0;
-      
+
       for (const chatKey of chatKeys) {
         const groupId = chatKey.replace('chat:', '');
-        
+
         // 그룹이 실제로 존재하는지 확인
         const group = await this.findGroupById(Number(groupId));
-        
+
         if (!group) {
-          // 그룹이 삭제된 경우 Redis 채팅도 삭제 
+          // 그룹이 삭제된 경우 Redis 채팅도 삭제
           await this.redis.del(chatKey);
           console.log(`[정리] 삭제된 그룹 ${groupId}의 채팅 삭제`);
           cleanedCount++;
         }
       }
-      
+
       console.log(`[정리] 완료: ${cleanedCount}개의 비활성 채팅 삭제`);
     } catch (error) {
       console.error('[정리] 비활성 그룹 채팅 정리 실패:', error);
     }
   }
 
+  async getPresignedURL(url: CreatePreSignedUrl, userId: number) {
+    const { contentType, group_id } = url;
+    const group = await this.groupRepository.findOne({
+      where: { id: Number(group_id) },
+    });
+    if (group === null) {
+      throw new ForbiddenException('그룹이 존재하지 않습니다.');
+    }
+    if (group.madeBy != userId) {
+      throw new ForbiddenException('그룹장이 아닙니다');
+    }
+    const type = contentType.split('/')[1];
+    const realKey = `overlay/${group_id}/${randomUUID()}.${type}`;
+    return await this.awsService.generatePresignedUrl(realKey, contentType);
+  }
+
+  async uploadComplete(
+    group_id: string,
+    overlay: Overlay
+  ): Promise<OverlayData> {
+    const group = await this.groupRepository.findOne({
+      where: { id: Number(group_id) },
+    });
+
+    if (!group) throw new ForbiddenException('그룹이 없습니다.');
+
+    const oldURL = group.url;
+
+    if (oldURL != null) {
+      await this.awsService.deleteObject(oldURL);
+    }
+
+    const pathname = extractKeyFromPresignedUrl(overlay.url);
+    const objectURL = constructS3PublicUrl(
+      process.env.AWS_S3_BUCKEY!,
+      process.env.AWS_REGION!,
+      pathname
+    );
+
+    const overlayData = {
+      url: objectURL,
+      x: overlay.x,
+      y: overlay.y,
+      height: overlay.height,
+      width: overlay.width,
+    };
+
+    await this.updateGroupOverlayToDB(group, overlayData);
+    return overlayData;
+  }
+
+  async getOverlayData(group_id: string): Promise<OverlayData> {
+    const result: OverlayData = await this.dataSource.query(
+      `select url, overlay_x as x, overlay_y as y, overlay_height as height, overlay_width as width from groups where id=$1::integer`,
+      [Number(group_id)]
+    );
+    return result;
+  }
+
+  async updateGroupOverlayToDB(group: Group, overlay: OverlayData) {
+    group.url = overlay.url;
+    group.x = overlay.x || group.x;
+    group.y = overlay.y || group.y;
+    group.height = overlay.height || group.height;
+    group.width = overlay.width || group.width;
+    await this.groupRepository.save(group);
+  }
+
   // 주기적 정리 시작 (6시간마다 - 부하 감소)
   startCleanupScheduler(): void {
-    setInterval(() => {
-      this.cleanupInactiveGroupChats().catch(console.error);
-    }, 6 * 60 * 60 * 1000); // 6시간마다
+    setInterval(
+      () => {
+        this.cleanupInactiveGroupChats().catch(console.error);
+      },
+      6 * 60 * 60 * 1000
+    ); // 6시간마다
   }
 }

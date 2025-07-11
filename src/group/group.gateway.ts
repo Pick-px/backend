@@ -1,14 +1,27 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+  OnGatewayInit,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Chat } from './entity/chat.entity';
-import { User } from '../user/entity/user.entity';
-import { ChatMessageDto } from './dto/chat-message.dto';
 import Redis from 'ioredis';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { Group } from './entity/group.entity';
 import { Inject } from '@nestjs/common';
+import { GroupService } from './group.service';
+import { Overlay } from './dto/overlay.dto';
+import { createAdapter } from '@socket.io/redis-adapter';
+
+interface SocketUser {
+  userId?: number;
+  id?: number;
+  [key: string]: any;
+}
 
 @WebSocketGateway({
   cors: {
@@ -20,33 +33,50 @@ import { Inject } from '@nestjs/common';
     credentials: true,
   },
 })
-export class GroupGateway {
+export class GroupGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
   constructor(
-    @InjectRepository(Chat)
-    private readonly chatRepository: Repository<Chat>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     @InjectRepository(GroupUser)
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    // === 통합 Redis 클라이언트 ===
+    private readonly groupService: GroupService,
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis
   ) {}
 
-  // 헬퍼: 인증 유저 ID 추출
-  private getUserIdFromClient(client: Socket): number | null {
-    const user = (client as any).user;
-    if (!user || (!user.userId && !user.id)) return null;
-    return Number(user.userId || user.id);
+  afterInit(server: Server) {
+    // Redis Adapter 설정
+    const pubClient = this.redis;
+    const subClient = this.redis.duplicate();
+    
+    server.adapter(createAdapter(pubClient, subClient));
+    console.log('[GroupGateway] Redis Adapter 설정 완료');
+  }
+
+  // Redis 세션에서 사용자 정보 가져오기
+  private async getUserIdFromClient(client: Socket): Promise<number | null> {
+    try {
+      const sessionKey = `socket:${client.id}:user`;
+      const userData = await this.redis.get(sessionKey);
+      
+      if (!userData) return null;
+      
+      const user = JSON.parse(userData) as SocketUser;
+      return Number(user.userId || user.id);
+    } catch (error) {
+      console.error('[GroupGateway] 사용자 세션 조회 중 에러:', error);
+      return null;
+    }
   }
 
   // 헬퍼: 그룹 멤버십 체크
-  private async checkGroupMembership(userId: number, groupId: number): Promise<GroupUser | null> {
+  private async checkGroupMembership(
+    userId: number,
+    groupId: number
+  ): Promise<GroupUser | null> {
     return await this.groupUserRepository.findOne({
       where: { user: { id: userId }, group: { id: groupId } },
       relations: ['user', 'group'],
@@ -59,26 +89,29 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
-    const userId = this.getUserIdFromClient(client);
+    const userId = await this.getUserIdFromClient(client);
     if (!userId) {
       client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
       return;
     }
     // 그룹 참여 여부 확인
-    const isMember = await this.checkGroupMembership(userId, Number(data.group_id));
+    const isMember = await this.checkGroupMembership(
+      userId,
+      Number(data.group_id)
+    );
     if (!isMember) {
       client.emit('chat_error', {
         message: '이 채팅방에 참여할 권한이 없습니다.',
       });
       return;
     }
-    
+
     // 이미 해당 그룹 룸에 있으면 아무것도 하지 않음
     if (client.rooms.has(`group_${data.group_id}`)) {
       console.log(`[GroupGateway] 이미 그룹 ${data.group_id}에 참여 중`);
       return;
     }
-    
+
     // 기존 그룹 룸에서만 leave (캔버스 룸은 유지)
     const currentRooms = Array.from(client.rooms);
     for (const room of currentRooms) {
@@ -91,7 +124,12 @@ export class GroupGateway {
         client.leave(room);
       }
     }
+    
     client.join(`group_${data.group_id}`);
+    
+    const overlay = await this.groupService.getOverlayData(data.group_id);
+    if (overlay.url != null)
+      this.server.to(`group_${data.group_id}`).emit('send_img', overlay);
   }
 
   // 채팅방에서 나갈 때 호출
@@ -100,7 +138,9 @@ export class GroupGateway {
     @MessageBody() data: { group_id: string },
     @ConnectedSocket() client: Socket
   ) {
+    const userId = await this.getUserIdFromClient(client);
     client.leave(`group_${data.group_id}`);
+    
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
@@ -110,13 +150,18 @@ export class GroupGateway {
     @ConnectedSocket() client: Socket
   ) {
     try {
-      const userId = this.getUserIdFromClient(client);
+      const userId = await this.getUserIdFromClient(client);
       if (!userId) {
-        client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
+        client.emit('auth_error', {
+          message: '인증 정보가 올바르지 않습니다.',
+        });
         return;
       }
       // 그룹 참여 여부 확인
-      const isMember = await this.checkGroupMembership(userId, Number(body.group_id));
+      const isMember = await this.checkGroupMembership(
+        userId,
+        Number(body.group_id)
+      );
       if (!isMember) {
         client.emit('chat_error', {
           message: '이 채팅방에 참여할 권한이 없습니다.',
@@ -135,26 +180,51 @@ export class GroupGateway {
       // Redis에 저장 (12시간 TTL)
       const chatKey = `chat:${Number(body.group_id)}`;
       await this.redis.lpush(chatKey, JSON.stringify(chatPayload));
-      
+
       // 채팅 리스트 크기 제한 (최대 50개)
       await this.redis.ltrim(chatKey, 0, 49);
-      
+
       // 12시간 TTL 설정
       await this.redis.expire(chatKey, 12 * 60 * 60);
-      
+
       // 워커로 채팅 이벤트 발행 (DB 저장을 위해)
-      await this.redis.publish('chat:message', JSON.stringify({
-        groupId: Number(body.group_id),
-        chatData: chatPayload
-      }));
-      
+      await this.redis.publish(
+        'chat:message',
+        JSON.stringify({
+          groupId: Number(body.group_id),
+          chatData: chatPayload,
+        })
+      );
+
       // 비동기 브로드캐스트 (응답 속도 향상)
       setImmediate(() => {
-        this.server.to(`group_${body.group_id}`).emit('chat_message', chatPayload);
+        this.server
+          .to(`group_${body.group_id}`)
+          .emit('chat_message', chatPayload);
       });
     } catch (error) {
       client.emit('chat_error', {
         message: '채팅 메시지 전송 중 오류가 발생했습니다.',
+      });
+    }
+  }
+
+  @SubscribeMessage('upload_img')
+  async uploadComplete(
+    @MessageBody() data: Overlay,
+    @ConnectedSocket() client: Socket
+  ) {
+    try {
+      const overlayData = await this.groupService.uploadComplete(
+        data.group_id,
+        data
+      );
+
+      this.server.to(`group_${data.group_id}`).emit('send_img', overlayData);
+    } catch (err) {
+      console.log(err);
+      client.emit('save_error', {
+        message: 'overlay 데이터 저장 중 오류가 발생했습니다.',
       });
     }
   }
