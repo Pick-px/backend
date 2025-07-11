@@ -140,17 +140,17 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     try {
       const userId = user.userId || user.id;
       const sessionKey = `socket:${socketId}:user`;
-      const userKey = `user:${userId}:socket`;
+      const userKey = `user:${userId}:sockets`; // 복수 소켓 지원
       
       // 소켓별 사용자 정보 저장
       await this.redis.set(sessionKey, JSON.stringify(user));
       await this.redis.expire(sessionKey, 3600); // 1시간 TTL
       
-      // 사용자별 소켓 정보 저장
-      await this.redis.set(userKey, socketId);
+      // 사용자별 소켓 목록 저장 (멀티 디바이스 지원)
+      await this.redis.sadd(userKey, socketId);
       await this.redis.expire(userKey, 3600); // 1시간 TTL
       
-      console.log(`[AppGateway] 사용자 ${userId} 세션 저장됨`);
+      console.log(`[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`);
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 저장 중 에러:', error);
     }
@@ -165,14 +165,20 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       if (userData) {
         const user = JSON.parse(userData);
         const userId = user.userId || user.id;
-        const userKey = `user:${userId}:socket`;
+        const userKey = `user:${userId}:sockets`;
         
         // 소켓별 사용자 정보 제거
         await this.redis.del(sessionKey);
-        // 사용자별 소켓 정보 제거
-        await this.redis.del(userKey);
+        // 사용자별 소켓 목록에서 제거
+        await this.redis.srem(userKey, socketId);
         
-        console.log(`[AppGateway] 사용자 ${userId} 세션 제거됨`);
+        // 사용자의 모든 소켓이 제거되었는지 확인
+        const remainingSockets = await this.redis.scard(userKey);
+        if (remainingSockets === 0) {
+          await this.redis.del(userKey);
+        }
+        
+        console.log(`[AppGateway] 사용자 ${userId} 세션 제거됨 (소켓: ${socketId})`);
       }
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 제거 중 에러:', error);
