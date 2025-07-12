@@ -28,7 +28,7 @@ useFactory: (configService: ConfigService) => {
       },
 */
 
-// === Redis 클라이언트 팩토리 함수 (통합 버전) ===
+// === Redis 클라이언트 팩토리 함수 (멀티서버 환경 최적화) ===
 const createRedisClient = (configService: ConfigService): Redis => {
   const redisUrl = configService.get<string>('REDIS_URL');
   const host = configService.get<string>('REDIS_HOST') || 'redis';
@@ -54,9 +54,12 @@ const createRedisClient = (configService: ConfigService): Redis => {
         console.log(`[Redis] 재연결 시도 ${times}회, ${delay}ms 후 재시도`);
         return delay;
       },
-      lazyConnect: true,
-      connectTimeout: 10000,
-      commandTimeout: 5000,
+      lazyConnect: false, // 즉시 연결 시도
+      connectTimeout: 15000,
+      commandTimeout: 10000,
+      keepAlive: 30000,
+      family: 4, // IPv4 강제 사용
+      enableReadyCheck: true,
     });
   } else {
     // 로컬 개발: 기존 설정 사용
@@ -66,7 +69,12 @@ const createRedisClient = (configService: ConfigService): Redis => {
       port,
       password: password || undefined,
       db,
-      lazyConnect: true,
+      lazyConnect: false, // 즉시 연결 시도
+      connectTimeout: 10000,
+      commandTimeout: 5000,
+      keepAlive: 30000,
+      family: 4,
+      enableReadyCheck: true,
     });
   }
 
@@ -75,12 +83,24 @@ const createRedisClient = (configService: ConfigService): Redis => {
     console.log(`[Redis] 연결 성공: ${host}:${port}`);
   });
 
+  redis.on('ready', () => {
+    console.log(`[Redis] 준비 완료: ${host}:${port} (상태: ${redis.status})`);
+  });
+
   redis.on('error', (error) => {
     console.error(`[Redis] 연결 에러:`, error);
   });
 
   redis.on('close', () => {
     console.log(`[Redis] 연결 종료`);
+  });
+
+  redis.on('reconnecting', (delay) => {
+    console.log(`[Redis] 재연결 시도 중... ${delay}ms 후`);
+  });
+
+  redis.on('end', () => {
+    console.log(`[Redis] 연결 종료됨`);
   });
 
   return redis;
