@@ -48,10 +48,42 @@ export class GroupGateway implements OnGatewayInit {
   ) {}
 
   afterInit(server: Server) {
-    // Redis Adapter 설정
+    console.log('[GroupGateway] afterInit 메서드 호출됨');
+    
+    // AppGateway, canvasGateway 초기화 완료 대기
+    setTimeout(() => {
+      this.initializeRedisAdapter(server);
+    }, 2000); // 2초 대기
+  }
+
+  private initializeRedisAdapter(server: Server) {
+    // Redis Adapter 설정 (멀티서버 환경 최적화)
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
 
+    console.log('[GroupGateway] Redis 상태 확인 중...', pubClient.status);
+    console.log('[GroupGateway] Redis 객체 타입:', typeof pubClient);
+    console.log('[GroupGateway] Redis 연결 상태:', pubClient.status);
+    
+    // Redis Adapter 설정 전 연결 상태 확인
+    if (pubClient.status === 'ready') {
+      console.log('[GroupGateway] Redis 연결 준비됨, Adapter 설정 시작');
+      this.setupRedisAdapter(server, pubClient, subClient);
+    } else {
+      console.log('[GroupGateway] Redis 연결 대기 중... 현재 상태:', pubClient.status);
+      pubClient.on('ready', () => {
+        console.log('[GroupGateway] Redis 연결 준비됨, Adapter 설정 시작');
+        this.setupRedisAdapter(server, pubClient, subClient);
+      });
+      
+      // 연결 실패 시 대비
+      pubClient.on('error', (error) => {
+        console.error('[GroupGateway] Redis 연결 에러:', error);
+      });
+    }
+  }
+
+  private setupRedisAdapter(server: Server, pubClient: Redis, subClient: Redis) {
     server.adapter(createAdapter(pubClient, subClient));
     console.log('[GroupGateway] Redis Adapter 설정 완료');
   }

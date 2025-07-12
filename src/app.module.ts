@@ -80,6 +80,18 @@ import { AwsModule } from './aws/aws.module';
     AwsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, AppGateway],
+  providers: [
+    AppService, 
+    // Gateway 초기화 순서 보장
+    {
+      provide: 'GATEWAY_INITIALIZATION',
+      useFactory: async (appGateway: AppGateway) => {
+        console.log('[AppModule] Gateway 초기화 순서 보장');
+        return appGateway;
+      },
+      inject: [AppGateway],
+    },
+    AppGateway,
+  ],
 })
 export class AppModule {}
