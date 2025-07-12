@@ -460,7 +460,7 @@ export class GroupService {
 
     const pathname = extractKeyFromPresignedUrl(overlay.url);
     const objectURL = constructS3PublicUrl(
-      process.env.AWS_S3_BUCKEY!,
+      process.env.AWS_S3_BUCKET!,
       process.env.AWS_REGION!,
       pathname
     );
