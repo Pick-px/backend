@@ -51,7 +51,7 @@ export class GroupGateway implements OnGatewayInit {
     // Redis Adapter 설정
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
-    
+
     server.adapter(createAdapter(pubClient, subClient));
     console.log('[GroupGateway] Redis Adapter 설정 완료');
   }
@@ -61,9 +61,9 @@ export class GroupGateway implements OnGatewayInit {
     try {
       const sessionKey = `socket:${client.id}:user`;
       const userData = await this.redis.get(sessionKey);
-      
+
       if (!userData) return null;
-      
+
       const user = JSON.parse(userData) as SocketUser;
       return Number(user.userId || user.id);
     } catch (error) {
@@ -124,12 +124,36 @@ export class GroupGateway implements OnGatewayInit {
         client.leave(room);
       }
     }
-    
+
     client.join(`group_${data.group_id}`);
-    
-    const overlay = await this.groupService.getOverlayData(data.group_id);
-    if (overlay.url != null)
-      this.server.to(`group_${data.group_id}`).emit('send_img', overlay);
+  }
+
+  @SubscribeMessage('join_img')
+  async handleJoinImg(
+    @MessageBody() data: { group_id: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    const userId = await this.getUserIdFromClient(client);
+    if (!userId) {
+      client.emit('auth_error', { message: '인증 정보가 올바르지 않습니다.' });
+      return;
+    }
+
+    const isMember = await this.groupService.isUserInGroup(
+      Number(userId),
+      Number(data.group_id)
+    );
+
+    if (!isMember)
+      client.emit('auth_error', { message: '그룹 유저가 아닙니다.' });
+
+    try {
+      const overlay = await this.groupService.getOverlayData(data.group_id);
+      if (overlay.url != null) client.emit('send_img', overlay);
+    } catch (err) {
+      console.log(err);
+      client.emit('send_error', { message: '오버레이 조회 중 오류 발생' });
+    }
   }
 
   // 채팅방에서 나갈 때 호출
@@ -140,7 +164,6 @@ export class GroupGateway implements OnGatewayInit {
   ) {
     const userId = await this.getUserIdFromClient(client);
     client.leave(`group_${data.group_id}`);
-    
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
