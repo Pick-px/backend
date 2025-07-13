@@ -22,7 +22,7 @@ export class CanvasHistoryBatch {
       const endedAtTime = new Date(canvas.endedAt).getTime();
       const delay = endedAtTime - now;
       await this.historyQueue.add(
-        'generate-history',
+        'canvas-history',
         { canvas_id: canvas.id },
         {
           jobId,

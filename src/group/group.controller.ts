@@ -10,7 +10,6 @@ import {
   HttpException,
   HttpStatus,
   Delete,
-  InternalServerErrorException,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
 import {
