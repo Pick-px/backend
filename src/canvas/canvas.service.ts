@@ -200,6 +200,8 @@ export class CanvasService {
         canvas_id: newCanvas.id,
         size_x,
         size_y,
+        startedAt: startedAt,
+        endedAt: endedAt,
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -256,6 +258,49 @@ export class CanvasService {
       [days.toString()]
     );
     return canvas;
+  }
+
+  // 캔버스 활성 상태 체크 (Redis 캐시 우선, DB 폴백)
+  private async isCanvasActive(canvasId: number): Promise<boolean> {
+    try {
+      // 1. Redis 캐시에서 조회
+      const cacheKey = `canvas:active:${canvasId}`;
+      const cachedData = await this.redisClient.get(cacheKey);
+      
+      if (cachedData !== null) {
+        // 캐시 히트 - endedAt 시간으로 정확한 상태 계산
+        const { startedAt, endedAt } = JSON.parse(cachedData);
+        const now = new Date();
+        const isActive = new Date(startedAt) <= now && (!endedAt || new Date(endedAt) > now);
+        
+        console.log(`[CanvasService] 캔버스 ${canvasId} 활성 상태 캐시 히트: ${isActive}`);
+        return isActive;
+      }
+      
+      // 2. DB에서 조회
+      const canvas = await this.canvasRepository.findOneBy({ id: canvasId });
+      if (!canvas) {
+        console.log(`[CanvasService] 캔버스 ${canvasId} 존재하지 않음`);
+        return false;
+      }
+      
+      const now = new Date();
+      const isActive = canvas.startedAt <= now && (!canvas.endedAt || canvas.endedAt > now);
+      
+      // 3. Redis에 캐싱 (TTL 12시간) - startedAt, endedAt 시간 저장
+      const cacheData = {
+        startedAt: canvas.startedAt.toISOString(),
+        endedAt: canvas.endedAt?.toISOString() || null
+      };
+      await this.redisClient.setex(cacheKey, 12 * 60 * 60, JSON.stringify(cacheData));
+      console.log(`[CanvasService] 캔버스 ${canvasId} 활성 상태 DB 조회 후 캐싱: ${isActive}`);
+      
+      return isActive;
+    } catch (error) {
+      console.error(`[CanvasService] 캔버스 ${canvasId} 활성 상태 체크 중 오류:`, error);
+      // 에러 발생 시 안전하게 비활성 처리
+      return false;
+    }
   }
 
   // 픽셀 그리기 적용 함수 (동시성 제어 포함)
@@ -339,7 +384,9 @@ export class CanvasService {
       metaData: meta,
     };
   }
+  
 
+  
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({
     canvas_id,
@@ -354,8 +401,16 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<DrawPixelResponse> {
+    // 캔버스 활성 상태 먼저 체크
+    const isActive = await this.isCanvasActive(parseInt(canvas_id));
+    console.log(`[CanvasService] 사용자 ${userId}가 캔버스 ${canvas_id}에 색칠 시도 - 활성 상태: ${isActive}`);
+    if (!isActive) {
+      console.log(`[CanvasService] 사용자 ${userId}가 비활성 캔버스 ${canvas_id}에 색칠 시도 차단`);
+      return { success: false, message: '시작되지 않았거나 종료된 캔버스입니다' };
+    }
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
     const cooldownSeconds = 10;
+
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);

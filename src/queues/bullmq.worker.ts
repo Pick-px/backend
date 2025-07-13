@@ -59,6 +59,8 @@ type PixelGenerationJobData = {
   canvas_id: number;
   size_x: number;
   size_y: number;
+  startedAt: Date;
+  endedAt: Date;
   created_at: Date;
   updated_at: Date;
 };
@@ -75,6 +77,8 @@ const PIXEL_BATCH_SIZE = 600; // 픽셀 배치 크기
 const CHAT_BATCH_SIZE = 100; // 채팅 배치 크기
 const BATCH_TIMEOUT_MS = 5000; // 10초
 
+
+
 // 픽셀 변경사항을 배치에 추가 (전체 통합 + 중복 제거)
 async function addPixelToBatch(
   canvasId: number,
@@ -82,6 +86,7 @@ async function addPixelToBatch(
   y: number,
   color: string
 ) {
+
   // 기존 같은 픽셀 제거 (최신 색상만 유지)
   const pixelKey = `${canvasId}:${x}:${y}`;
   for (const existingPixel of pixelBatchQueue) {
@@ -400,7 +405,7 @@ void (async () => {
       async (job) => {
         try {
           const start = Date.now();
-          const { canvas_id, size_x, size_y, created_at, updated_at } =
+          const { canvas_id, size_x, size_y, startedAt, endedAt, created_at, updated_at } =
             job.data;
           console.log(
             `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
