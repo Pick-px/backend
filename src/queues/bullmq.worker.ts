@@ -5,6 +5,7 @@ import { redisConnection } from './bullmq.config';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
+import { PixelInfo } from '../interface/PixelInfo.interface';
 import { Canvas } from '../canvas/entity/canvas.entity';
 import { generatorPixelToImg } from '../util/imageGenerator.util';
 import { randomUUID } from 'crypto';
@@ -84,7 +85,8 @@ async function addPixelToBatch(
   canvasId: number,
   x: number,
   y: number,
-  color: string
+  color: string,
+  owner: number | null = null
 ) {
 
   // 기존 같은 픽셀 제거 (최신 색상만 유지)
@@ -96,7 +98,7 @@ async function addPixelToBatch(
     }
   }
 
-  const pixelData = `${pixelKey}:${color}`;
+  const pixelData = `${pixelKey}:${color}:${owner === null || (typeof owner === 'string' && owner === '') ? '' : Number(owner)}`;
   pixelBatchQueue.add(pixelData);
 
   // 배치 크기 도달 시 즉시 flush
@@ -132,11 +134,11 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
     // 캔버스별로 그룹화
     const canvasGroups = new Map<
       number,
-      Array<{ x: number; y: number; color: string }>
+      Array<PixelInfo>
     >();
 
     for (const pixelData of pixelBatchQueue) {
-      const [canvasId, x, y, color] = pixelData.split(':');
+      const [canvasId, x, y, color, owner] = pixelData.split(':');
       const cid = Number(canvasId);
       if (!canvasGroups.has(cid)) {
         canvasGroups.set(cid, []);
@@ -145,6 +147,7 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
         x: Number(x),
         y: Number(y),
         color,
+        owner: owner === undefined || owner === null || (typeof owner === 'string' && owner === '') ? null : Number(owner),
       });
     }
 
@@ -172,21 +175,42 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
             values.push(canvasId, p.x, p.y);
           });
 
-          // CASE WHEN ... THEN ... 및 색상 파라미터
+          // CASE WHEN ... THEN ... 및 색상, owner, updated_at 파라미터
           chunk.forEach((p, idx) => {
             const baseIdx = idx * 3;
-            const colorIdx = chunk.length * 3 + idx + 1;
-            // CASE 조건에 색상 파라미터 추가
+            const colorIdx = chunk.length * 3 + idx * 3 + 1;
+            const ownerIdx = chunk.length * 3 + idx * 3 + 2;
+            const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
+            
+            // CASE 조건에 색상, owner, updated_at 파라미터 추가
             caseClauseParts.push(
               `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN $${colorIdx}`
             );
-            values.push(p.color);
+            values.push(
+              p.color,
+              p.owner === null || p.owner === undefined || (typeof p.owner === 'string' && p.owner === '') ? null : Number(p.owner),
+              new Date().toISOString()
+            );
           });
 
           const query = `
             UPDATE pixels
             SET color = CASE
               ${caseClauseParts.join('\n')}
+            END,
+            owner = CASE
+              ${caseClauseParts.map((_, idx) => {
+                const baseIdx = idx * 3;
+                const ownerIdx = chunk.length * 3 + idx * 3 + 2;
+                return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${ownerIdx} AS BIGINT)`;
+              }).join('\n')}
+            END,
+            updated_at = CASE
+              ${caseClauseParts.map((_, idx) => {
+                const baseIdx = idx * 3;
+                const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
+                return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${updatedAtIdx} AS TIMESTAMP)`;
+              }).join('\n')}
             END
             WHERE (canvas_id, x, y) IN (${whereClauseParts.join(', ')})
           `;
@@ -208,6 +232,13 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
       `[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}`
     );
     pixelBatchQueue.clear();
+
+    // 픽셀 플러시 후 dirty_pixels set 비우기
+    for (const canvasId of canvasGroups.keys()) {
+      if (redis) {
+        await redis.del(`dirty_pixels:${canvasId}`);
+      }
+    }
   } catch (error) {
     console.error(`[Worker] 픽셀 배치 flush 에러:`, error);
   }
@@ -307,8 +338,8 @@ async function setupRedisEventListeners() {
 
   pixelSubscriber.on('message', async (channel, message) => {
     try {
-      const { canvasId, x, y, color } = JSON.parse(message);
-      await addPixelToBatch(canvasId, x, y, color);
+      const { canvasId, x, y, color, owner } = JSON.parse(message);
+      await addPixelToBatch(canvasId, x, y, color, owner);
     } catch (error) {
       console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
     }
@@ -408,8 +439,7 @@ void (async () => {
           const { canvas_id, size_x, size_y, startedAt, endedAt, created_at, updated_at } =
             job.data;
           console.log(
-            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
-          );
+            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`          );
           const pixels: Pixel[] = [];
           for (let y = 0; y < size_y; y++) {
             for (let x = 0; x < size_x; x++) {
@@ -420,6 +450,7 @@ void (async () => {
               pixel.createdAt = created_at;
               pixel.updatedAt = updated_at;
               pixel.color = '#000000';
+              pixel.owner = null;
               pixels.push(pixel);
             }
           }
@@ -484,12 +515,13 @@ export async function publishPixelUpdate(
   canvasId: number,
   x: number,
   y: number,
-  color: string
+  color: string,
+  owner: number | null = null
 ) {
   try {
     await redis.publish(
       'pixel:updated',
-      JSON.stringify({ canvasId, x, y, color })
+      JSON.stringify({ canvasId, x, y, color, owner })
     );
   } catch (error) {
     console.error('[Worker] 픽셀 이벤트 발행 에러:', error);
@@ -505,3 +537,4 @@ export async function publishChatMessage(groupId: number, chatData: any) {
 }
 
 export { worker, historyWorker };
+

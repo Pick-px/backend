@@ -40,12 +40,16 @@ create table if not exists pixels
     x          integer                                        not null,
     y          integer                                        not null,
     color      varchar(7) default '#000000'::character varying not null,
+    owner      bigint,
     created_at timestamp                                      not null,
     updated_at timestamp                                      not null,
     primary key (id),
     constraint fk_canvas
         foreign key (canvas_id) references canvases
-            on delete cascade
+            on delete cascade,
+    constraint fk_pixel_owner
+        foreign key (owner) references users(id)
+            on delete set null
 );
 
 alter table pixels

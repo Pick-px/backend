@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
 import { GroupUser } from '../../entity/GroupUser.entity';
+import { Pixel } from '../../pixel/entity/pixel.entity';
 
 @Entity('users')
 export class User {
@@ -27,4 +28,7 @@ export class User {
 
   @OneToMany(() => GroupUser, (gu) => gu.user)
   groupUsers: GroupUser[];
+
+  @OneToMany(() => Pixel, (pixel) => pixel.ownerUser)
+  ownedPixels: Pixel[];
 }

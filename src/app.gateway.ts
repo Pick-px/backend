@@ -183,15 +183,19 @@ export class AppGateway
     try {
       const userId = user.userId || user.id;
       const sessionKey = `socket:${socketId}:user`;
-      const userKey = `user:${userId}:sockets`; // 복수 소켓 지원
+      const userKey = `user:${userId}:sockets`;
 
       // 소켓별 사용자 정보 저장
-      await this.redis.set(sessionKey, JSON.stringify(user));
-      await this.redis.expire(sessionKey, 3600); // 1시간 TTL
+      const sessionData = {
+        id: userId,
+        username: user.nickName,
+      };
+      await this.redis.set(sessionKey, JSON.stringify(sessionData));
+      await this.redis.expire(sessionKey, 3600);
 
       // 사용자별 소켓 목록 저장 (멀티 디바이스 지원)
       await this.redis.sadd(userKey, socketId);
-      await this.redis.expire(userKey, 3600); // 1시간 TTL
+      await this.redis.expire(userKey, 3600);
 
       console.log(
         `[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`
