@@ -4,7 +4,7 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import Redis from 'ioredis';
-import { pixelQueue, historyQueue } from '../queues/bullmq.queue';
+import { historyQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { User } from '../user/entity/user.entity';
@@ -12,6 +12,7 @@ import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 import { PixelInfo } from '../interface/PixelInfo.interface';
+import { CanvasStrategyFactory } from './strategy/createFactory.factory';
 
 @Injectable()
 export class CanvasService {
@@ -24,6 +25,7 @@ export class CanvasService {
     private readonly userCanvasRepository: Repository<UserCanvas>,
     @Inject('REDIS_CLIENT')
     private readonly redisClient: Redis,
+    private readonly strategyFactory: CanvasStrategyFactory,
     @InjectDataSource()
     private readonly dataSource: DataSource
   ) {}
@@ -218,76 +220,32 @@ export class CanvasService {
 
   // 캔버스 생성 함수 refactor 필수
   async createCanvas(createCanvasDto: createCanvasDto): Promise<Canvas | null> {
-    const { title, type, size_x, size_y, startedAt, endedAt } = createCanvasDto;
-
-    // 캔버스 엔티티 생성
-    const canvas = this.canvasRepository.create({
-      title: title,
-      type: type,
-      sizeX: size_x,
-      sizeY: size_y,
-      createdAt: new Date(),
-      startedAt: startedAt,
-      endedAt: endedAt,
-    });
-
     try {
-      // 캔버스 저장
-      const newCanvas = await this.canvasRepository.save(canvas);
-      // 픽셀 생성 작업 큐에 추가
-      await pixelQueue.add('pixel-generation', {
-        canvas_id: newCanvas.id,
-        size_x,
-        size_y,
-        startedAt: startedAt,
-        endedAt: endedAt,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-
-      const now = Date.now();
-      const endedAtTime = new Date(endedAt).getTime();
-      const delay = endedAtTime - now;
-
-      console.log('delay time: ', delay);
-
-      // 3일 이내 종료되는 경우 → 큐에 바로 등록
-      const THREE_DAYS = 1000 * 60 * 60 * 24 * 3;
-      const jobId = `history-${newCanvas.id}`;
-      if (delay > 0 && delay <= THREE_DAYS && newCanvas.type != 'public') {
-        await historyQueue.add(
-          'canvas-history',
-          { canvas_id: newCanvas.id },
-          { jobId: jobId, delay }
-        );
-      }
-      // 캔버스별 전체 채팅 그룹 자동 생성
-      const savedGroup = await this.groupRepository.save({
-        name: '전체',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        maxParticipants: 100, // 전체 채팅 최대 인원(추후 변경 가능)
-        currentParticipantsCount: 1,
-        canvasId: newCanvas.id,
-        madeBy: 1, // 1번 관리자 계정으로 고정
-        is_default: true,
-      });
-      // 그룹 저장
-      // 관리자(1번) 유저를 group_users에 추가
-      const groupUser = new GroupUser();
-      groupUser.group = savedGroup;
-      groupUser.user = { id: 1 } as User;
-      groupUser.joinedAt = new Date();
-      groupUser.canvas_id = newCanvas.id;
-      await this.groupRepository.manager.save(GroupUser, groupUser);
-      // 캔버스 생성 완료 반환
-      return newCanvas;
+      const strategy = this.strategyFactory.getStrategy(createCanvasDto.type);
+      const canvas = await strategy.create(createCanvasDto);
+      return canvas;
     } catch (err) {
       console.error(err);
       return null;
     }
   }
 
+  // async isEndingWithOneDay(canvas: Canvas) {
+  //   const now = Date.now();
+  //   const endedAtTime = new Date(canvas.endedAt).getTime();
+  //   const delay = endedAtTime - now;
+
+  //   // 1일 이내 종료되는 경우 → 큐에 바로 등록
+  //   const THREE_DAYS = 1000 * 60 * 60 * 24 * 1;
+  //   const jobId = `history-${canvas.id}`;
+  //   if (delay > 0 && delay <= THREE_DAYS && canvas.type != 'public') {
+  //     await historyQueue.add(
+  //       'canvas-history',
+  //       { canvas_id: canvas.id },
+  //       { jobId: jobId, delay }
+  //     );
+  //   }
+  // }
   async findCanvasesEndingWithinDays(day: number) {
     const days = day;
     const canvas: Canvas[] = await this.dataSource.query(
@@ -305,38 +263,51 @@ export class CanvasService {
       // 1. Redis 캐시에서 조회
       const cacheKey = `canvas:active:${canvasId}`;
       const cachedData = await this.redisClient.get(cacheKey);
-      
+
       if (cachedData !== null) {
         // 캐시 히트 - endedAt 시간으로 정확한 상태 계산
         const { startedAt, endedAt } = JSON.parse(cachedData);
         const now = new Date();
-        const isActive = new Date(startedAt) <= now && (!endedAt || new Date(endedAt) > now);
-        
-        console.log(`[CanvasService] 캔버스 ${canvasId} 활성 상태 캐시 히트: ${isActive}`);
+        const isActive =
+          new Date(startedAt) <= now && (!endedAt || new Date(endedAt) > now);
+
+        console.log(
+          `[CanvasService] 캔버스 ${canvasId} 활성 상태 캐시 히트: ${isActive}`
+        );
         return isActive;
       }
-      
+
       // 2. DB에서 조회
       const canvas = await this.canvasRepository.findOneBy({ id: canvasId });
       if (!canvas) {
         console.log(`[CanvasService] 캔버스 ${canvasId} 존재하지 않음`);
         return false;
       }
-      
+
       const now = new Date();
-      const isActive = canvas.startedAt <= now && (!canvas.endedAt || canvas.endedAt > now);
-      
+      const isActive =
+        canvas.startedAt <= now && (!canvas.endedAt || canvas.endedAt > now);
+
       // 3. Redis에 캐싱 (TTL 12시간) - startedAt, endedAt 시간 저장
       const cacheData = {
         startedAt: canvas.startedAt.toISOString(),
-        endedAt: canvas.endedAt?.toISOString() || null
+        endedAt: canvas.endedAt?.toISOString() || null,
       };
-      await this.redisClient.setex(cacheKey, 12 * 60 * 60, JSON.stringify(cacheData));
-      console.log(`[CanvasService] 캔버스 ${canvasId} 활성 상태 DB 조회 후 캐싱: ${isActive}`);
-      
+      await this.redisClient.setex(
+        cacheKey,
+        12 * 60 * 60,
+        JSON.stringify(cacheData)
+      );
+      console.log(
+        `[CanvasService] 캔버스 ${canvasId} 활성 상태 DB 조회 후 캐싱: ${isActive}`
+      );
+
       return isActive;
     } catch (error) {
-      console.error(`[CanvasService] 캔버스 ${canvasId} 활성 상태 체크 중 오류:`, error);
+      console.error(
+        `[CanvasService] 캔버스 ${canvasId} 활성 상태 체크 중 오류:`,
+        error
+      );
       // 에러 발생 시 안전하게 비활성 처리
       return false;
     }
@@ -423,9 +394,7 @@ export class CanvasService {
       metaData: meta,
     };
   }
-  
 
-  
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({
     canvas_id,
@@ -442,14 +411,20 @@ export class CanvasService {
   }): Promise<DrawPixelResponse> {
     // 캔버스 활성 상태 먼저 체크
     const isActive = await this.isCanvasActive(parseInt(canvas_id));
-    console.log(`[CanvasService] 사용자 ${userId}가 캔버스 ${canvas_id}에 색칠 시도 - 활성 상태: ${isActive}`);
+    console.log(
+      `[CanvasService] 사용자 ${userId}가 캔버스 ${canvas_id}에 색칠 시도 - 활성 상태: ${isActive}`
+    );
     if (!isActive) {
-      console.log(`[CanvasService] 사용자 ${userId}가 비활성 캔버스 ${canvas_id}에 색칠 시도 차단`);
-      return { success: false, message: '시작되지 않았거나 종료된 캔버스입니다' };
+      console.log(
+        `[CanvasService] 사용자 ${userId}가 비활성 캔버스 ${canvas_id}에 색칠 시도 차단`
+      );
+      return {
+        success: false,
+        message: '시작되지 않았거나 종료된 캔버스입니다',
+      };
     }
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
     const cooldownSeconds = 10;
-
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);
