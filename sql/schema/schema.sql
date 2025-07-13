@@ -26,6 +26,7 @@ create table if not exists canvases
     ended_at   timestamp   not null,
     size_x     integer     not null,
     size_y     integer     not null,
+    url varchar(1024),
     primary key (id)
 );
 

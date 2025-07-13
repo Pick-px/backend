@@ -18,6 +18,7 @@ import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AppGateway } from './app.gateway';
 import { AwsModule } from './aws/aws.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -29,12 +30,11 @@ import { AwsModule } from './aws/aws.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
-        
-        // 환경변수 디버깅 로그
-        console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
-        console.log('[DB] DATABASE_URL 존재:', !!databaseUrl);
         if (databaseUrl) {
-          console.log('[DB] DATABASE_URL 사용 (마스킹):', databaseUrl.replace(/\/\/.*@/, '//***@'));
+          console.log(
+            '[DB] DATABASE_URL 사용 (마스킹):',
+            databaseUrl.replace(/\/\/.*@/, '//***@')
+          );
         }
 
         if (databaseUrl) {
@@ -70,6 +70,7 @@ import { AwsModule } from './aws/aws.module';
       },
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     CanvasModule,
     DatabaseModule,
