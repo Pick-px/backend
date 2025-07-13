@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
+import { PixelInfo } from '../interface/PixelInfo.interface';
 import {
   ApiTags,
   ApiOperation,
@@ -68,8 +69,8 @@ export class CanvasController {
           startedAt: '2024-07-15T00:00:00.000Z',
           endedAt: '2024-08-01T00:00:00.000Z',
           pixels: [
-            { x: 100, y: 200, color: '#ff0000' },
-            { x: 101, y: 201, color: '#00ff00' },
+            { x: 100, y: 200, color: '#ff0000', owner: 123 },
+            { x: 101, y: 201, color: '#00ff00', owner: null },
           ],
           compression: 'gzip',
           totalPixels: 5000,

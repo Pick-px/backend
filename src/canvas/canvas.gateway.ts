@@ -11,12 +11,12 @@ import { CanvasService } from './canvas.service';
 import Redis from 'ioredis';
 import { Inject } from '@nestjs/common';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
+import { PixelUpdateEvent } from '../interface/PixelInfo.interface';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 interface SocketUser {
-  userId?: number;
-  id?: number;
-  [key: string]: any;
+  id: number;
+  username?: string;
 }
 
 @WebSocketGateway({
@@ -87,16 +87,27 @@ export class CanvasGateway implements OnGatewayInit {
     console.log('[CanvasGateway] Redis Adapter 설정 완료');
   }
 
-  // Redis 세션에서 사용자 정보 가져오기
+  // Redis 세션에서 사용자 id만 가져오기 (owner 용)
   private async getUserIdFromClient(client: Socket): Promise<number | null> {
     try {
       const sessionKey = `socket:${client.id}:user`;
       const userData = await this.redis.get(sessionKey);
-
       if (!userData) return null;
-
       const user = JSON.parse(userData) as SocketUser;
-      return Number(user.userId || user.id);
+      return typeof user.id === 'number' ? user.id : Number(user.id);
+    } catch (error) {
+      console.error('[CanvasGateway] 사용자 세션 조회 중 에러:', error);
+      return null;
+    }
+  }
+
+  // Redis 세션에서 전체 유저 정보 가져오기 (username 등 활용 가능)
+  private async getUserInfoFromClient(client: Socket): Promise<SocketUser | null> {
+    try {
+      const sessionKey = `socket:${client.id}:user`;
+      const userData = await this.redis.get(sessionKey);
+      if (!userData) return null;
+      return JSON.parse(userData) as SocketUser;
     } catch (error) {
       console.error('[CanvasGateway] 사용자 세션 조회 중 에러:', error);
       return null;
@@ -139,6 +150,7 @@ export class CanvasGateway implements OnGatewayInit {
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
+          owner: userId,
         })
       );
 
@@ -229,6 +241,7 @@ export class CanvasGateway implements OnGatewayInit {
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
+          owner: userId,
         })
       );
 
