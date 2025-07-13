@@ -10,8 +10,7 @@ create table if not exists users
     updated_at timestamp    not null,
     user_name  varchar(50)  not null,
     primary key (id),
-    unique (email),
-    unique (user_name)
+    unique (email)
 );
 
 alter table users

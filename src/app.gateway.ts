@@ -38,31 +38,67 @@ export class AppGateway
   ) {}
 
   afterInit(server: Server) {
-    // Redis Adapter 설정
+    console.log('[AppGateway] afterInit 메서드 호출됨');
+
+    // Redis Adapter 설정 (멀티서버 환경 최적화)
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
 
-    server.adapter(createAdapter(pubClient, subClient));
-    console.log('[AppGateway] Redis Adapter 설정 완료');
+    console.log('[AppGateway] Redis 상태 확인 중...', pubClient.status);
+    console.log('[AppGateway] Redis 객체 타입:', typeof pubClient);
+    console.log('[AppGateway] Redis 연결 상태:', pubClient.status);
 
-    // 서버 시작 시 이전 소켓 ID들 정리
-    this.cleanupOldSockets();
-
-    // 모든 이벤트에 대한 디버그 리스너 추가
-    server.on('connection', (socket) => {
-      console.log(`[AppGateway] 클라이언트 연결됨: ${socket.id}`);
-
-      // 모든 이벤트 로깅
-      socket.onAny((eventName, ...args) => {
-        console.log(
-          `[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`,
-          args
-        );
+    // Redis Adapter 설정 전 연결 상태 확인
+    if (pubClient.status === 'ready') {
+      console.log('[AppGateway] Redis 연결 준비됨, Adapter 설정 시작');
+      this.setupRedisAdapter(server, pubClient, subClient);
+    } else {
+      console.log(
+        '[AppGateway] Redis 연결 대기 중... 현재 상태:',
+        pubClient.status
+      );
+      pubClient.on('ready', () => {
+        console.log('[AppGateway] Redis 연결 준비됨, Adapter 설정 시작');
+        this.setupRedisAdapter(server, pubClient, subClient);
       });
-    });
 
-    // 주기적 접속자 수 업데이트 시작
-    this.startPeriodicUserCountBroadcast();
+      // 연결 실패 시 대비
+      pubClient.on('error', (error) => {
+        console.error('[AppGateway] Redis 연결 에러:', error);
+      });
+    }
+  }
+
+  private setupRedisAdapter(
+    server: Server,
+    pubClient: Redis,
+    subClient: Redis
+  ) {
+    try {
+      server.adapter(createAdapter(pubClient, subClient));
+      console.log('[AppGateway] Redis Adapter 설정 완료');
+
+      // 서버 시작 시 이전 소켓 ID들 정리
+      this.cleanupOldSockets();
+
+      // 모든 이벤트에 대한 디버그 리스너 추가
+      server.on('connection', (socket) => {
+        console.log(`[AppGateway] 클라이언트 연결됨: ${socket.id}`);
+
+        // 모든 이벤트 로깅
+        socket.onAny((eventName, ...args) => {
+          console.log(
+            `[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`,
+            args
+          );
+        });
+      });
+
+      // 주기적 접속자 수 업데이트 시작
+      this.startPeriodicUserCountBroadcast();
+    } catch (error) {
+      console.error('[AppGateway] Redis Adapter 설정 실패:', error);
+    }
   }
 
   // 서버 시작 시 이전 소켓 ID들 정리
