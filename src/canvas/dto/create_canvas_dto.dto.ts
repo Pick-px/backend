@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { IsString, IsNotEmpty, IsNumber, IsIn, IsDate } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
 export class createCanvasDto {
   @ApiProperty({
     example: 'canvas title',
@@ -36,7 +41,7 @@ export class createCanvasDto {
   size_y: number;
 
   @ApiProperty({
-    example: new Date().toISOString(),
+    example: dayjs().tz('Asia/Seoul').format(),
     description: '캔버스 시작일 (ISO8601 형식)',
   })
   @IsNotEmpty()
@@ -44,7 +49,7 @@ export class createCanvasDto {
   startedAt: Date;
 
   @ApiProperty({
-    example: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    example: dayjs().tz('Asia/Seoul').add(3, 'minute').format(),
     description: '캔버스 종료일 (ISO8601 형식, 상시 캔버스는 null 가능)',
     required: false,
   })

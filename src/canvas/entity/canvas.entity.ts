@@ -11,14 +11,19 @@ export class Canvas {
 
   @Column({
     type: 'text',
-    enum: ['public', 'event'],
+    enum: ['public', 'event', 'game'],
   })
-  type: 'public' | 'event';
+  type: 'public' | 'event' | 'game';
 
   @Column({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', name: 'started_at', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'timestamp',
+    name: 'started_at',
+    nullable: true,
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   startedAt: Date;
 
   @Column({ type: 'timestamp', name: 'ended_at', nullable: true })
@@ -29,6 +34,9 @@ export class Canvas {
 
   @Column({ name: 'size_y' })
   sizeY: number;
+
+  @Column({ name: 'url' })
+  url: string;
 
   @OneToMany(() => UserCanvas, (uc) => uc.canvas)
   canvasUseres: UserCanvas[];

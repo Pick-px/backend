@@ -19,7 +19,7 @@ import { Overlay } from '../group/dto/overlay.dto';
 import {
   constructS3PublicUrl,
   extractKeyFromPresignedUrl,
-} from 'src/util/urlParsing.util';
+} from '../util/urlParsing.util';
 
 interface OverlayData {
   url: string;
@@ -455,7 +455,8 @@ export class GroupService {
     const oldURL = group.url;
 
     if (oldURL != null) {
-      await this.awsService.deleteObject(oldURL);
+      const key = extractKeyFromPresignedUrl(oldURL);
+      await this.awsService.deleteObject(key);
     }
 
     const pathname = extractKeyFromPresignedUrl(overlay.url);

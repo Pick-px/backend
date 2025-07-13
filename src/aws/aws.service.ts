@@ -1,4 +1,4 @@
-import { Delete, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommandInput,
@@ -7,8 +7,6 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as dotenv from 'dotenv';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 dotenv.config();
 
 @Injectable()

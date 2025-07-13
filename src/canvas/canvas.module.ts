@@ -9,16 +9,24 @@ import { Group } from '../group/entity/group.entity'; // 추가
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
+import { BullModule } from '@nestjs/bull';
+import { redisConnection } from '../queues/bullmq.config';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas]), 
+    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas]),
     JwtModule.register({}),
     AuthModule,
-    // ... 기타 모듈
+    BullModule.registerQueueAsync({
+      name: 'canvas-history',
+      useFactory: () => ({
+        name: 'canvas-history',
+        connection: redisConnection,
+      }),
+    }),
   ],
   controllers: [CanvasController],
   providers: [CanvasService, CanvasGateway],
-  exports: [CanvasService],
+  exports: [CanvasService, BullModule],
 })
 export class CanvasModule {}

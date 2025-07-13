@@ -3,9 +3,8 @@ import { createCanvasDto } from './dto/create_canvas_dto.dto';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
-import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
-import { pixelQueue } from '../queues/bullmq.queue';
+import { pixelQueue, historyQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
 import { User } from '../user/entity/user.entity';
@@ -18,8 +17,6 @@ export class CanvasService {
   constructor(
     @InjectRepository(Canvas)
     private readonly canvasRepository: Repository<Canvas>,
-    @InjectRepository(Pixel)
-    private readonly pixelRepository: Repository<Pixel>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(UserCanvas)
@@ -95,13 +92,6 @@ export class CanvasService {
     } finally {
       console.timeEnd('fromdb');
     }
-    // console.time('map');
-    // const result = dbPixels.map((pixel) => ({
-    //   x: pixel.x,
-    //   y: pixel.y,
-    //   color: pixel.color,
-    // }));
-    // console.timeEnd('map');
   }
 
   // 통합: Redis 우선, 없으면 DB + Redis 캐싱
@@ -129,8 +119,6 @@ export class CanvasService {
     // 3. Redis에 캐싱
     const pipeline = this.redisClient.pipeline();
     for (const pixel of dbPixels) {
-      // const key = `${realCanvasId}:${pixel.x}:${pixel.y}`;
-      // await this.redisClient.set(key, pixel.color);
       const field = `${pixel.x}:${pixel.y}`;
       pipeline.hset(`canvas:${realCanvasId}`, field, pixel.color);
     }
@@ -217,6 +205,23 @@ export class CanvasService {
         created_at: new Date(),
         updated_at: new Date(),
       });
+
+      const now = Date.now();
+      const endedAtTime = new Date(endedAt).getTime();
+      const delay = endedAtTime - now;
+
+      console.log('delay time: ', delay);
+
+      // 3일 이내 종료되는 경우 → 큐에 바로 등록
+      const THREE_DAYS = 1000 * 60 * 60 * 24 * 3;
+      const jobId = `history-${newCanvas.id}`;
+      if (delay > 0 && delay <= THREE_DAYS && newCanvas.type != 'public') {
+        await historyQueue.add(
+          'canvas-history',
+          { canvas_id: newCanvas.id },
+          { jobId: jobId, delay }
+        );
+      }
       // 캔버스별 전체 채팅 그룹 자동 생성
       const savedGroup = await this.groupRepository.save({
         name: '전체',
@@ -242,6 +247,17 @@ export class CanvasService {
       console.error(err);
       return null;
     }
+  }
+
+  async findCanvasesEndingWithinDays(day: number) {
+    const days = day;
+    const canvas: Canvas[] = await this.dataSource.query(
+      `SELECT id AS canvas_id, ended_at 
+   FROM canvases 
+   WHERE ended_at <= NOW() + ($1 || ' days')::INTERVAL`,
+      [days.toString()]
+    );
+    return canvas;
   }
 
   // 캔버스 활성 상태 체크 (Redis 캐시 우선, DB 폴백)
