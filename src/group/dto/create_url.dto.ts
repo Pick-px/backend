@@ -14,7 +14,7 @@ export class CreatePreSignedUrl {
     description: '컨텐츠 타입(jpg, png) 보내시면 됩니다.',
   })
   @IsString()
-  @Matches(/^image\/(jpg|jpeg|png|webp)$/, {
+  @Matches(/^image\/(jpg|jpeg|png|webp)$/i, {
     message: '지원되는 이미지 형식은 jpeg, png, jpg, webp입니다.',
   })
   contentType: string;

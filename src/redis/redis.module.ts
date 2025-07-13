@@ -42,10 +42,12 @@ const createRedisClient = (configService: ConfigService): Redis => {
     // 프로덕션: REDIS_URL 사용 (ElastiCache Serverless with TLS)
     console.log('[Redis] REDIS_URL을 사용하여 연결 시도');
     redis = new Redis(redisUrl, {
-      tls: redisUrl.startsWith('rediss://') ? {
-        // ElastiCache Serverless TLS 설정
-        rejectUnauthorized: false,
-      } : undefined,
+      tls: redisUrl.startsWith('rediss://')
+        ? {
+            // ElastiCache Serverless TLS 설정
+            rejectUnauthorized: false,
+          }
+        : undefined,
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         const delay = Math.min(times * 100, 3000);

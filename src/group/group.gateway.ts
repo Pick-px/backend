@@ -128,8 +128,7 @@ export class GroupGateway implements OnGatewayInit {
     client.join(`group_${data.group_id}`);
     
     const overlay = await this.groupService.getOverlayData(data.group_id);
-    if (overlay.url != null)
-      this.server.to(`group_${data.group_id}`).emit('send_img', overlay);
+    if (overlay.url != null) client.emit('send_img', overlay);
   }
 
   // 채팅방에서 나갈 때 호출

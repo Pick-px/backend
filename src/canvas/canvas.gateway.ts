@@ -43,7 +43,7 @@ export class CanvasGateway implements OnGatewayInit {
     // Redis Adapter 설정
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
-    
+
     server.adapter(createAdapter(pubClient, subClient));
     console.log('[CanvasGateway] Redis Adapter 설정 완료');
   }
@@ -53,9 +53,9 @@ export class CanvasGateway implements OnGatewayInit {
     try {
       const sessionKey = `socket:${client.id}:user`;
       const userData = await this.redis.get(sessionKey);
-      
+
       if (!userData) return null;
-      
+
       const user = JSON.parse(userData) as SocketUser;
       return Number(user.userId || user.id);
     } catch (error) {
@@ -128,16 +128,18 @@ export class CanvasGateway implements OnGatewayInit {
   ) {
     const userId = await this.getUserIdFromClient(client);
     const canvasId = Number(data.canvas_id);
-    
+
     await client.join(`canvas_${data.canvas_id}`);
-    
+
     // 캔버스별 소켓ID 관리 (AppGateway에서 접속자 수 계산에 사용)
     const canvasSocketKey = `canvas:${canvasId}:sockets`;
     await this.redis.sadd(canvasSocketKey, client.id);
     await this.redis.expire(canvasSocketKey, 600); // 10분 TTL
-    
-    console.log(`[CanvasGateway] 소켓 ${client.id}가 캔버스 ${canvasId}에 참여함`);
-    
+
+    console.log(
+      `[CanvasGateway] 소켓 ${client.id}가 캔버스 ${canvasId}에 참여함`
+    );
+
     // 쿨다운 정보 자동 푸시
     if (userId && data.canvas_id) {
       try {

@@ -21,7 +21,9 @@ import { Inject } from '@nestjs/common';
     credentials: true,
   },
 })
-export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
+export class AppGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+{
   @WebSocketServer()
   server: Server;
 
@@ -39,7 +41,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // Redis Adapter 설정
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
-    
+
     server.adapter(createAdapter(pubClient, subClient));
     console.log('[AppGateway] Redis Adapter 설정 완료');
 
@@ -49,10 +51,13 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     // 모든 이벤트에 대한 디버그 리스너 추가
     server.on('connection', (socket) => {
       console.log(`[AppGateway] 클라이언트 연결됨: ${socket.id}`);
-      
+
       // 모든 이벤트 로깅
       socket.onAny((eventName, ...args) => {
-        console.log(`[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`, args);
+        console.log(
+          `[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`,
+          args
+        );
       });
     });
 
@@ -66,7 +71,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       const oldSocketCount = await this.redis.scard('active_sockets');
       if (oldSocketCount > 0) {
         await this.redis.del('active_sockets');
-        console.log(`[AppGateway] 서버 시작 시 이전 소켓 ID ${oldSocketCount}개 정리됨`);
+        console.log(
+          `[AppGateway] 서버 시작 시 이전 소켓 ID ${oldSocketCount}개 정리됨`
+        );
       }
     } catch (error) {
       console.error('[AppGateway] 이전 소켓 정리 중 에러:', error);
@@ -141,16 +148,18 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       const userId = user.userId || user.id;
       const sessionKey = `socket:${socketId}:user`;
       const userKey = `user:${userId}:sockets`; // 복수 소켓 지원
-      
+
       // 소켓별 사용자 정보 저장
       await this.redis.set(sessionKey, JSON.stringify(user));
       await this.redis.expire(sessionKey, 3600); // 1시간 TTL
-      
+
       // 사용자별 소켓 목록 저장 (멀티 디바이스 지원)
       await this.redis.sadd(userKey, socketId);
       await this.redis.expire(userKey, 3600); // 1시간 TTL
-      
-      console.log(`[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`);
+
+      console.log(
+        `[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`
+      );
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 저장 중 에러:', error);
     }
@@ -161,24 +170,26 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     try {
       const sessionKey = `socket:${socketId}:user`;
       const userData = await this.redis.get(sessionKey);
-      
+
       if (userData) {
         const user = JSON.parse(userData);
         const userId = user.userId || user.id;
         const userKey = `user:${userId}:sockets`;
-        
+
         // 소켓별 사용자 정보 제거
         await this.redis.del(sessionKey);
         // 사용자별 소켓 목록에서 제거
         await this.redis.srem(userKey, socketId);
-        
+
         // 사용자의 모든 소켓이 제거되었는지 확인
         const remainingSockets = await this.redis.scard(userKey);
         if (remainingSockets === 0) {
           await this.redis.del(userKey);
         }
-        
-        console.log(`[AppGateway] 사용자 ${userId} 세션 제거됨 (소켓: ${socketId})`);
+
+        console.log(
+          `[AppGateway] 사용자 ${userId} 세션 제거됨 (소켓: ${socketId})`
+        );
       }
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 제거 중 에러:', error);
@@ -203,11 +214,14 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
     try {
       // 소켓 연결 수로 접속자 수 계산
       const activeSocketCount = await this.redis.scard('active_sockets');
-      
+
       // 변화가 없거나 너무 빈번한 브로드캐스트 방지
       const now = Date.now();
-      if (activeSocketCount === this.lastBroadcastCount && 
-          now - this.lastBroadcastTime < 5000) { // 5초 내 중복 방지
+      if (
+        activeSocketCount === this.lastBroadcastCount &&
+        now - this.lastBroadcastTime < 5000
+      ) {
+        // 5초 내 중복 방지
         return;
       }
 
@@ -218,14 +232,16 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
       this.server.emit('active_user_count', {
         count: activeSocketCount,
         canvasCounts,
-        timestamp: now
+        timestamp: now,
       });
-      
+
       // 상태 업데이트
       this.lastBroadcastCount = activeSocketCount;
       this.lastBroadcastTime = now;
-      
-      console.log(`[AppGateway] 실시간 접속자 수 브로드캐스트: ${activeSocketCount}명 (소켓 연결 수)`);
+
+      console.log(
+        `[AppGateway] 실시간 접속자 수 브로드캐스트: ${activeSocketCount}명 (소켓 연결 수)`
+      );
       console.log(`[AppGateway] 캔버스별 접속자 수:`, canvasCounts);
     } catch (error) {
       console.error('[AppGateway] 접속자 수 브로드캐스트 에러:', error);
@@ -236,10 +252,10 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
   private async getCanvasUserCounts() {
     try {
       const canvasCounts: { [canvasId: string]: number } = {};
-      
+
       // canvas:*:sockets 키들을 모두 조회
       const canvasKeys = await this.redis.keys('canvas:*:sockets');
-      
+
       for (const key of canvasKeys) {
         const match = key.match(/^canvas:(\d+):sockets$/);
         if (match) {
@@ -248,7 +264,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect, OnG
           canvasCounts[canvasId] = count;
         }
       }
-      
+
       return canvasCounts;
     } catch (error) {
       console.error('[AppGateway] 캔버스별 접속자 수 계산 에러:', error);
