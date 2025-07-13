@@ -19,6 +19,7 @@ import { HttpModule } from '@nestjs/axios';
 import { AppGateway } from './app.gateway';
 import { AwsModule } from './aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { PixelModule } from './pixel/pixel.module';
 
 @Module({
   imports: [
@@ -79,10 +80,11 @@ import { ScheduleModule } from '@nestjs/schedule';
     GroupModule,
     HttpModule,
     AwsModule,
+    PixelModule,
   ],
   controllers: [AppController],
   providers: [
-    AppService, 
+    AppService,
     // Gateway 초기화 순서 보장
     {
       provide: 'GATEWAY_INITIALIZATION',

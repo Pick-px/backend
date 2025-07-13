@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository, DataSource } from 'typeorm';
 import { Group } from './entity/group.entity';
+import { Canvas } from '../canvas/entity/canvas.entity';
 import { Chat } from './entity/chat.entity';
 import { User } from '../user/entity/user.entity';
 import { GroupUser } from '../entity/GroupUser.entity';
@@ -493,6 +494,28 @@ export class GroupService {
     group.height = overlay.height || group.height;
     group.width = overlay.width || group.width;
     await this.groupRepository.save(group);
+  }
+
+  async generateDefaultGruop(canvas: Canvas) {
+    return await this.groupRepository.save({
+      name: '전체',
+      createdAt: canvas.createdAt,
+      updatedAt: canvas.createdAt,
+      maxParticipants: 100, // 전체 채팅 최대 인원(추후 변경 가능)
+      currentParticipantsCount: 1,
+      canvasId: canvas.id,
+      madeBy: 1, // 1번 관리자 계정으로 고정
+      is_default: true,
+    });
+  }
+
+  async setGroupMadeBy(group: Group, user_id: number, canvas_id: number) {
+    const groupUser = new GroupUser();
+    groupUser.group = group;
+    groupUser.user = { id: user_id } as User;
+    groupUser.joinedAt = new Date();
+    groupUser.canvas_id = canvas_id;
+    await this.groupRepository.manager.save(GroupUser, groupUser);
   }
 
   // 주기적 정리 시작 (6시간마다 - 부하 감소)

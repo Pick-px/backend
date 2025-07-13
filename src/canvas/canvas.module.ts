@@ -11,6 +11,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
 import { BullModule } from '@nestjs/bull';
 import { redisConnection } from '../queues/bullmq.config';
+import { GroupModule } from '../group/group.module';
+import { PixelModule } from '../pixel/pixel.module';
+import { CanvasStrategyFactory } from './strategy/createFactory.factory';
+import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
+import { EventCanvasStrategy } from './strategy/eventCanvasStrategy.strategy';
+import { GameCanvasStrategy } from './strategy/gameCanvasStrategy.strategy';
 
 @Module({
   imports: [
@@ -24,9 +30,18 @@ import { redisConnection } from '../queues/bullmq.config';
         connection: redisConnection,
       }),
     }),
+    GroupModule,
+    PixelModule,
   ],
   controllers: [CanvasController],
-  providers: [CanvasService, CanvasGateway],
+  providers: [
+    CanvasService,
+    CanvasGateway,
+    CanvasStrategyFactory,
+    PublicCanvasStrategy,
+    GameCanvasStrategy,
+    EventCanvasStrategy,
+  ],
   exports: [CanvasService, BullModule],
 })
 export class CanvasModule {}
