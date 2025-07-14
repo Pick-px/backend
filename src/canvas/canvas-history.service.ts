@@ -4,7 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
-import { CanvasHistory } from './entity/canvas-history.entity';
+import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
 
 @Injectable()
@@ -152,10 +152,10 @@ export class CanvasHistoryService {
       size_y: row.size_y,
       participant_count: row.participant_count,
       total_try_count: row.total_try_count,
-      top_try_user_name: row.top_try_user_name,
-      top_try_user_count: row.top_try_user_count,
-      top_own_user_name: row.top_own_user_name,
-      top_own_user_count: row.top_own_user_count
+      top_try_user_name: row.top_try_user_name ?? null,
+      top_try_user_count: row.top_try_user_count ?? null,
+      top_own_user_name: row.top_own_user_name ?? null,
+      top_own_user_count: row.top_own_user_count ?? null
     }));
   }
 } 

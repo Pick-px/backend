@@ -49,7 +49,7 @@ const historyWorker = new Worker(
     console.timeEnd('history start');
 
     const history = await historyRepository.findOne({
-      where: { canvas_id: Number(canvas_id) },
+      where: { canvasId: Number(canvas_id) },
     });
 
     if (!history) throw new Error('CanvasHistory not found');

@@ -8,7 +8,7 @@ import { CanvasGateway } from './canvas.gateway';
 import { Group } from '../group/entity/group.entity'; // 추가
 import { ImageHistory } from './entity/imageHistory.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
-import { CanvasHistory } from './entity/canvas-history.entity';
+import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';

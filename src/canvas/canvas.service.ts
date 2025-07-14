@@ -235,7 +235,7 @@ export class CanvasService {
 
   async generateCanvasHistory(canvas: Canvas): Promise<void> {
     await this.historyRepository.save({
-      canvas_id: canvas.id,
+      canvasId: canvas.id,
     });
   }
   async findCanvasesEndingWithinDays(day: number) {
