@@ -20,6 +20,27 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# 타임존 설정
+RUN apk add --no-cache tzdata \
+  && cp /usr/share/zoneinfo/Asia/Seoul /etc/localtime \
+  && echo "Asia/Seoul" > /etc/timezone
+
+ENV TZ=Asia/Seoul
+
+# Install dependencies for development and canvas build
+RUN apk add --no-cache \
+  git \
+  python3 \
+  make \
+  g++ \
+  cairo-dev \
+  jpeg-dev \
+  pango-dev \
+  giflib-dev \
+  pixman-dev \
+  vips-dev
+
+
 # Install dumb-init and curl for proper signal handling and health checks
 RUN apk add --no-cache dumb-init curl
 
