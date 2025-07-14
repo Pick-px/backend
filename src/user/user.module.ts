@@ -7,7 +7,7 @@ import { HttpModule } from '@nestjs/axios';
 import { AuthModule } from '../auth/auth.module';
 import { QuestionUser } from '../game/entity/question_user.entity';
 import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
-import { CanvasModule } from 'src/canvas/canvas.module';
+import { CanvasModule } from '../canvas/canvas.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, CanvasHistory, QuestionUser]),
