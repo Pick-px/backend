@@ -10,7 +10,7 @@ const cookieParser = require('cookie-parser');
 dotenv.config();
 
 async function bootstrap() {
-  // 환경변수 검증
+  // // 환경변수 검증
   // const requiredEnvVars = ['JWT_SECRET'];
 
   // // 프로덕션 환경에서는 DATABASE_URL과 REDIS_URL 필수

@@ -4,25 +4,56 @@ metadata:
   name: nestjs-ingress
   namespace: nestjs-app
   annotations:
+    # 기본 ALB 설정
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/load-balancer-name: nestjs-eks-alb
+    
+    # SSL/TLS 설정
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:863518449560:certificate/b9aec76a-3962-418e-a03a-4827ef59dd4c
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
-    # 기존 ALB와 동일한 이름으로 생성되도록 설정
-    alb.ingress.kubernetes.io/load-balancer-name: pick-px-alb-eks
+    
+    # Backend 프로토콜 설정
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    
+    # 헬스체크 설정
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    
+    # Socket.IO/WebSocket 지원을 위한 ALB 속성
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http2.enabled=false,idle_timeout.timeout_seconds=300
+    
+    # Sticky Session 설정 (Target Group 레벨)
+    alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.type=lb_cookie,stickiness.lb_cookie.duration_seconds=86400
+    
+    # Sticky Session 강화 (Actions 레벨)
+    alb.ingress.kubernetes.io/actions.forward-single: '{"type":"forward","forwardConfig":{"targetGroups":[{"serviceName":"nestjs-service","servicePort":80,"weight":100}],"targetGroupStickinessConfig":{"enabled":true,"durationSeconds":86400}}}'
+    
+    # 태그 설정
+    alb.ingress.kubernetes.io/tags: Environment=production,Application=nestjs-app
+
 spec:
   rules:
-  # WebSocket 도메인 (직접 접근)
-  - host: ws.pick-px.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: nestjs-service
-            port:
-              number: 80
+    - http:
+        paths:
+          # Socket.IO 전용 경로 (우선순위 높음)
+          - path: /socket.io
+            pathType: Prefix
+            backend:
+              service:
+                name: nestjs-service
+                port:
+                  number: 80
+          # 기본 경로 (모든 나머지 요청)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nestjs-service
+                port:
+                  number: 80
