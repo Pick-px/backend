@@ -1,0 +1,126 @@
+name: Cleanup Staging Environment
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # 매일 오전 2시에 TTL 만료된 스테이징 환경 정리
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  EKS_CLUSTER_NAME: nestjs-cluster
+  ECR_REPOSITORY: nestjs-app
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Cleanup specific PR staging environment
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "🧹 PR #${{ github.event.number }} 스테이징 환경 정리 중..."
+          
+          STAGING_NAMESPACE="nestjs-app-staging"
+          
+          if kubectl get namespace $STAGING_NAMESPACE > /dev/null 2>&1; then
+            echo "📦 스테이징 리소스 삭제 중..."
+            
+            # 네임스페이스 정보 출력
+            kubectl get namespace $STAGING_NAMESPACE --show-labels
+            
+            # 모든 리소스 삭제
+            kubectl delete all --all -n $STAGING_NAMESPACE --timeout=300s || echo "리소스 삭제 실패"
+            kubectl delete secrets --all -n $STAGING_NAMESPACE --timeout=60s || echo "시크릿 삭제 실패"
+            kubectl delete configmaps --all -n $STAGING_NAMESPACE --timeout=60s || echo "컨피그맵 삭제 실패"
+            
+            # 네임스페이스 삭제
+            kubectl delete namespace $STAGING_NAMESPACE --timeout=300s || echo "네임스페이스 삭제 실패"
+            
+            echo "✅ PR #${{ github.event.number }} 스테이징 환경 정리 완료"
+          else
+            echo "ℹ️ PR #${{ github.event.number }} 스테이징 네임스페이스가 존재하지 않습니다"
+          fi
+
+      - name: Cleanup TTL expired staging environments
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🕐 TTL 만료된 스테이징 환경 정리..."
+          
+          CURRENT_TIME=$(date +%s)
+          
+          # TTL 라벨이 있는 네임스페이스 찾기
+          kubectl get namespaces -l staging.cleanup/ttl-unix --no-headers -o custom-columns=NAME:.metadata.name | while read namespace; do
+            if [ ! -z "$namespace" ]; then
+              TTL_UNIX=$(kubectl get namespace $namespace -o jsonpath='{.metadata.labels.staging\.cleanup/ttl-unix}' 2>/dev/null || echo "")
+              PR_NUMBER=$(kubectl get namespace $namespace -o jsonpath='{.metadata.labels.staging\.cleanup/pr-number}' 2>/dev/null || echo "unknown")
+              
+              if [ ! -z "$TTL_UNIX" ] && [ "$CURRENT_TIME" -gt "$TTL_UNIX" ]; then
+                echo "⏰ TTL 만료된 네임스페이스 발견: $namespace (PR: $PR_NUMBER)"
+                
+                # 리소스 삭제
+                kubectl delete all --all -n $namespace --timeout=300s || echo "리소스 삭제 실패: $namespace"
+                kubectl delete secrets --all -n $namespace --timeout=60s || echo "시크릿 삭제 실패: $namespace"
+                kubectl delete configmaps --all -n $namespace --timeout=60s || echo "컨피그맵 삭제 실패: $namespace"
+                
+                # 네임스페이스 삭제
+                kubectl delete namespace $namespace --timeout=300s || echo "네임스페이스 삭제 실패: $namespace"
+                
+                echo "✅ 만료된 스테이징 환경 정리 완료: $namespace"
+              else
+                echo "ℹ️ 네임스페이스 $namespace 는 아직 TTL이 만료되지 않았습니다"
+              fi
+            fi
+          done
+
+      - name: Cleanup old ECR images
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🗑️ 오래된 ECR 이미지 정리 중..."
+          
+          # 30일 이상 된 이미지 삭제 (latest와 최근 10개 제외)
+          aws ecr list-images \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --filter tagStatus=TAGGED \
+            --query 'imageIds[?imageTag!=`latest`]' \
+            --output json | \
+          jq -r '.[10:] | .[] | select(.imageTag | test("^pr-")) | .imageDigest' | \
+          head -20 | \
+          while read digest; do
+            if [ ! -z "$digest" ]; then
+              echo "🗑️ 오래된 이미지 삭제: $digest"
+              aws ecr batch-delete-image \
+                --repository-name ${{ env.ECR_REPOSITORY }} \
+                --image-ids imageDigest=$digest || echo "이미지 삭제 실패: $digest"
+            fi
+          done
+          
+          echo "✅ ECR 이미지 정리 완료"
+
+      - name: Summary
+        run: |
+          echo "📊 정리 작업 요약:"
+          echo "- 현재 네임스페이스 목록:"
+          kubectl get namespaces -l name=nestjs-app || echo "관련 네임스페이스 없음"
+          
+          echo "- ECR 이미지 개수:"
+          aws ecr list-images --repository-name ${{ env.ECR_REPOSITORY }} --query 'length(imageIds)' || echo "ECR 정보 조회 실패"

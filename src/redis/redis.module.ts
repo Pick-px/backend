@@ -39,7 +39,7 @@ const createRedisClient = (configService: ConfigService): Redis => {
   let redis: Redis;
 
   if (redisUrl) {
-    // 프로덕션: REDIS_URL 사용 (ElastiCache Serverless with TLS)
+    // 프로덕션: REDIS_URL 사용 (TLS 비활성화)
     console.log('[Redis] REDIS_URL을 사용하여 연결 시도');
     redis = new Redis(redisUrl, {
       tls: redisUrl.startsWith('rediss://')

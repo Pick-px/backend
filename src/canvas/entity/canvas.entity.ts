@@ -1,6 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
 import { Group } from '../../group/entity/group.entity';
+import { GameUserResult } from '../../game/entity/game_result.entity';
+import { CanvasHistory } from './canvasHistory.entity';
 @Entity('canvases')
 export class Canvas {
   @PrimaryGeneratedColumn()
@@ -35,8 +43,11 @@ export class Canvas {
   @Column({ name: 'size_y' })
   sizeY: number;
 
-  @Column({ name: 'url' })
-  url: string;
+  @OneToOne(() => CanvasHistory, (ch) => ch.canvas)
+  canvasHistory: CanvasHistory;
+
+  @OneToMany(() => GameUserResult, (gu) => gu.canvas)
+  gameUserResults: GameUserResult[];
 
   @OneToMany(() => UserCanvas, (uc) => uc.canvas)
   canvasUseres: UserCanvas[];

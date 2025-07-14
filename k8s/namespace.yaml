@@ -4,3 +4,4 @@ metadata:
   name: nestjs-app
   labels:
     name: nestjs-app
+    app: nestjs-app
