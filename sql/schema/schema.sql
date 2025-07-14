@@ -63,7 +63,8 @@ create table if not exists user_canvas
     id bigserial,
     user_id   bigint                              not null,
     canvas_id integer                             not null,
-    count integer default 0 not null,
+    try_count integer default 0 not null,
+    own_count integer default null,
     joined_at timestamp default CURRENT_TIMESTAMP not null,
     primary key (id),
     unique(user_id, canvas_id),
@@ -137,6 +138,29 @@ create table if not exists chats
 
 alter table chats
     owner to pixel_user;
+
+-- 캔버스 히스토리
+CREATE TABLE IF NOT EXISTS canvas_history (
+    canvas_id INTEGER PRIMARY KEY,
+    participant_count INTEGER NOT NULL DEFAULT 0,
+    total_try_count INTEGER NOT NULL DEFAULT 0,
+    top_try_user_id BIGINT,
+    top_try_user_count INTEGER,
+    top_own_user_id BIGINT,
+    top_own_user_count INTEGER,
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id),
+    FOREIGN KEY (top_try_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (top_own_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 캔버스 이미지 상태 스냅샷 저장 테이블
+CREATE TABLE IF NOT EXISTS image_history (
+    id bigserial PRIMARY KEY,
+    canvas_history_id INTEGER NOT NULL,
+    image_url VARCHAR(1024) NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (canvas_history_id) REFERENCES canvas_history(canvas_id) ON DELETE CASCADE
+);
 
 -- 관리자 계정 seed (email=pickpx0617@gmail.com, user_name=gmg team)
 INSERT INTO users (email, password, created_at, updated_at, user_name)
