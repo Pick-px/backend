@@ -11,8 +11,8 @@ import { CanvasService } from './canvas.service';
 import Redis from 'ioredis';
 import { Inject } from '@nestjs/common';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
-import { PixelUpdateEvent } from '../interface/PixelInfo.interface';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { setSocketServer } from '../socket/socket.manager';
 
 interface SocketUser {
   id: number;
@@ -41,7 +41,7 @@ export class CanvasGateway implements OnGatewayInit {
 
   afterInit(server: Server) {
     console.log('[CanvasGateway] afterInit 메서드 호출됨');
-
+    setSocketServer(this.server);
     // AppGateway 초기화 완료 대기
     setTimeout(() => {
       this.initializeRedisAdapter(server);
@@ -102,7 +102,9 @@ export class CanvasGateway implements OnGatewayInit {
   }
 
   // Redis 세션에서 전체 유저 정보 가져오기 (username 등 활용 가능)
-  private async getUserInfoFromClient(client: Socket): Promise<SocketUser | null> {
+  private async getUserInfoFromClient(
+    client: Socket
+  ): Promise<SocketUser | null> {
     try {
       const sessionKey = `socket:${client.id}:user`;
       const userData = await this.redis.get(sessionKey);

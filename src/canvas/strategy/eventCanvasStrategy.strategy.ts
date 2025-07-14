@@ -8,7 +8,6 @@ import { createCanvasDto } from '../dto/create_canvas_dto.dto';
 import { PixelService } from '../../pixel/pixel.service';
 import { CanvasService } from '../canvas.service';
 import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
-
 @Injectable()
 export class EventCanvasStrategy
   extends AbstractCanvasStrategy
@@ -40,6 +39,7 @@ export class EventCanvasStrategy
     const newCanvas = await this.canvasRepository.save(canvas);
     await this.runPostCreationSteps(newCanvas);
     await this.isEndingWithOneDay(newCanvas);
+    await this.putJobOnStartQueue(newCanvas);
     return newCanvas;
   }
 }

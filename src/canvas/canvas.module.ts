@@ -12,8 +12,6 @@ import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
-import { BullModule } from '@nestjs/bull';
-import { redisConnection } from '../queues/bullmq.config';
 import { GroupModule } from '../group/group.module';
 import { PixelModule } from '../pixel/pixel.module';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
@@ -39,13 +37,6 @@ import { UserModule } from '../user/user.module';
     ]),
     JwtModule.register({}),
     AuthModule,
-    BullModule.registerQueueAsync({
-      name: 'canvas-history',
-      useFactory: () => ({
-        name: 'canvas-history',
-        connection: redisConnection,
-      }),
-    }),
     GroupModule,
     PixelModule,
   ],
@@ -59,6 +50,6 @@ import { UserModule } from '../user/user.module';
     EventCanvasStrategy,
     CanvasHistoryService,
   ],
-  exports: [CanvasService, BullModule, CanvasHistoryService],
+  exports: [CanvasService, CanvasHistoryService],
 })
 export class CanvasModule {}

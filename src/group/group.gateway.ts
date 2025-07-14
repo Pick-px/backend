@@ -188,11 +188,8 @@ export class GroupGateway implements OnGatewayInit {
 
     try {
       const overlay = await this.groupService.getOverlayData(data.group_id);
-      console.log('이미지 전송 데이터 조회 완료');
-      console.log(overlay[0]);
       if (overlay[0].url != null) {
         client.emit('send_img', overlay[0]);
-        console.log('이미지 전송 완료');
       }
     } catch (err) {
       console.log(err);
