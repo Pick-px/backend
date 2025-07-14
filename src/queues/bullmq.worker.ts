@@ -3,17 +3,79 @@ import { config } from 'dotenv';
 import { AppDataSource } from '../data-source';
 import { redisConnection } from './bullmq.config';
 import { Pixel } from '../pixel/entity/pixel.entity';
-import { Canvas } from '../canvas/entity/canvas.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
-import { Group } from '../group/entity/group.entity';
+import { PixelInfo } from '../interface/PixelInfo.interface';
+import { Canvas } from '../canvas/entity/canvas.entity';
+import { generatorPixelToImg } from '../util/imageGenerator.util';
+import { randomUUID } from 'crypto';
+import { uploadBufferToS3 } from '../util/s3UploadFile.util';
+import { ImageHistory } from '../canvas/entity/imageHistory.entity';
+import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
 
 config();
 
+const canvasRepository = AppDataSource.getRepository(Canvas);
+const pixelRepository = AppDataSource.getRepository(Pixel);
+const historyRepository = AppDataSource.getRepository(CanvasHistory);
+const imgRepository = AppDataSource.getRepository(ImageHistory);
+
+const historyWorker = new Worker(
+  'canvas-history',
+  async (job) => {
+    console.time('history start');
+    const { canvas_id } = job.data;
+    console.log(canvas_id);
+    const canvas = await canvasRepository.findOne({
+      where: { id: Number(canvas_id) },
+    });
+    if (!canvas) throw new Error('Canvas not found');
+    const pixelData: { x: number; y: number; color: string }[] =
+      await pixelRepository.query(
+        'select x, y, color from pixels where canvas_id = $1::INTEGER',
+        [Number(canvas_id)]
+      );
+
+    const buffer = await generatorPixelToImg(
+      pixelData,
+      canvas.sizeX,
+      canvas.sizeY
+    );
+    const contentType = 'image/png';
+    const key = `history/${canvas_id}/${randomUUID()}.png`;
+    await uploadBufferToS3(buffer, key, contentType);
+    console.timeEnd('history start');
+
+    const history = await historyRepository.findOne({
+      where: { canvas_id: Number(canvas_id) },
+    });
+
+    if (!history) throw new Error('CanvasHistory not found');
+
+    await imgRepository.save({
+      canvasHistory: history,
+      image_url: key,
+      captured_at: new Date(),
+    });
+  },
+  {
+    concurrency: 4,
+    connection: {
+      ...redisConnection,
+      commandTimeout: 30000,
+      connectTimeout: 30000,
+    },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  }
+);
+console.log('[Worker] Canvas history worker 초기화 완료, 대기 중...');
 type PixelGenerationJobData = {
   canvas_id: number;
   size_x: number;
   size_y: number;
+  startedAt: Date;
+  endedAt: Date;
   created_at: Date;
   updated_at: Date;
 };
@@ -35,7 +97,8 @@ async function addPixelToBatch(
   canvasId: number,
   x: number,
   y: number,
-  color: string
+  color: string,
+  owner: number | null = null
 ) {
   // 기존 같은 픽셀 제거 (최신 색상만 유지)
   const pixelKey = `${canvasId}:${x}:${y}`;
@@ -46,7 +109,7 @@ async function addPixelToBatch(
     }
   }
 
-  const pixelData = `${pixelKey}:${color}`;
+  const pixelData = `${pixelKey}:${color}:${owner === null || (typeof owner === 'string' && owner === '') ? '' : Number(owner)}`;
   pixelBatchQueue.add(pixelData);
 
   // 배치 크기 도달 시 즉시 flush
@@ -76,17 +139,14 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
   if (pixelBatchQueue.size === 0) return;
 
   try {
-    const pixelRepo = AppDataSource.getRepository(Pixel);
+    // const pixelRepo = AppDataSource.getRepository(Pixel);
     const CHUNK_SIZE = 200;
 
     // 캔버스별로 그룹화
-    const canvasGroups = new Map<
-      number,
-      Array<{ x: number; y: number; color: string }>
-    >();
+    const canvasGroups = new Map<number, Array<PixelInfo>>();
 
     for (const pixelData of pixelBatchQueue) {
-      const [canvasId, x, y, color] = pixelData.split(':');
+      const [canvasId, x, y, color, owner] = pixelData.split(':');
       const cid = Number(canvasId);
       if (!canvasGroups.has(cid)) {
         canvasGroups.set(cid, []);
@@ -95,6 +155,12 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
         x: Number(x),
         y: Number(y),
         color,
+        owner:
+          owner === undefined ||
+          owner === null ||
+          (typeof owner === 'string' && owner === '')
+            ? null
+            : Number(owner),
       });
     }
 
@@ -122,21 +188,50 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
             values.push(canvasId, p.x, p.y);
           });
 
-          // CASE WHEN ... THEN ... 및 색상 파라미터
+          // CASE WHEN ... THEN ... 및 색상, owner, updated_at 파라미터
           chunk.forEach((p, idx) => {
             const baseIdx = idx * 3;
-            const colorIdx = chunk.length * 3 + idx + 1;
-            // CASE 조건에 색상 파라미터 추가
+            const colorIdx = chunk.length * 3 + idx * 3 + 1;
+            const ownerIdx = chunk.length * 3 + idx * 3 + 2;
+            const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
+
+            // CASE 조건에 색상, owner, updated_at 파라미터 추가
             caseClauseParts.push(
               `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN $${colorIdx}`
             );
-            values.push(p.color);
+            values.push(
+              p.color,
+              p.owner === null ||
+                p.owner === undefined ||
+                (typeof p.owner === 'string' && p.owner === '')
+                ? null
+                : Number(p.owner),
+              new Date().toISOString()
+            );
           });
 
           const query = `
             UPDATE pixels
             SET color = CASE
               ${caseClauseParts.join('\n')}
+            END,
+            owner = CASE
+              ${caseClauseParts
+                .map((_, idx) => {
+                  const baseIdx = idx * 3;
+                  const ownerIdx = chunk.length * 3 + idx * 3 + 2;
+                  return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${ownerIdx} AS BIGINT)`;
+                })
+                .join('\n')}
+            END,
+            updated_at = CASE
+              ${caseClauseParts
+                .map((_, idx) => {
+                  const baseIdx = idx * 3;
+                  const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
+                  return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${updatedAtIdx} AS TIMESTAMP)`;
+                })
+                .join('\n')}
             END
             WHERE (canvas_id, x, y) IN (${whereClauseParts.join(', ')})
           `;
@@ -158,6 +253,13 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
       `[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}`
     );
     pixelBatchQueue.clear();
+
+    // 픽셀 플러시 후 dirty_pixels set 비우기
+    for (const canvasId of canvasGroups.keys()) {
+      if (redis) {
+        await redis.del(`dirty_pixels:${canvasId}`);
+      }
+    }
   } catch (error) {
     console.error(`[Worker] 픽셀 배치 flush 에러:`, error);
   }
@@ -257,8 +359,8 @@ async function setupRedisEventListeners() {
 
   pixelSubscriber.on('message', async (channel, message) => {
     try {
-      const { canvasId, x, y, color } = JSON.parse(message);
-      await addPixelToBatch(canvasId, x, y, color);
+      const { canvasId, x, y, color, owner } = JSON.parse(message);
+      await addPixelToBatch(canvasId, x, y, color, owner);
     } catch (error) {
       console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
     }
@@ -355,8 +457,15 @@ void (async () => {
       async (job) => {
         try {
           const start = Date.now();
-          const { canvas_id, size_x, size_y, created_at, updated_at } =
-            job.data;
+          const {
+            canvas_id,
+            size_x,
+            size_y,
+            startedAt,
+            endedAt,
+            created_at,
+            updated_at,
+          } = job.data;
           console.log(
             `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
           );
@@ -370,6 +479,7 @@ void (async () => {
               pixel.createdAt = created_at;
               pixel.updatedAt = updated_at;
               pixel.color = '#000000';
+              pixel.owner = null;
               pixels.push(pixel);
             }
           }
@@ -413,6 +523,15 @@ void (async () => {
     worker.on('error', (err) => {
       console.error('[Worker] 워커 에러:', err);
     });
+    historyWorker.on('completed', (job) => {
+      console.log(`[HistoryWorker] Job 완료: ${job.id}`);
+    });
+    historyWorker.on('failed', (job, err) => {
+      console.error(`[HistoryWorker] Job 실패: ${job?.id}`, err);
+    });
+    historyWorker.on('error', (err) => {
+      console.error('[HistoryWorker] 워커 에러:', err);
+    });
     console.log('[Worker] 워커 시작 완료, job 대기 중...');
   } catch (error) {
     console.error('[Worker] 초기화 실패:', error);
@@ -425,12 +544,13 @@ export async function publishPixelUpdate(
   canvasId: number,
   x: number,
   y: number,
-  color: string
+  color: string,
+  owner: number | null = null
 ) {
   try {
     await redis.publish(
       'pixel:updated',
-      JSON.stringify({ canvasId, x, y, color })
+      JSON.stringify({ canvasId, x, y, color, owner })
     );
   } catch (error) {
     console.error('[Worker] 픽셀 이벤트 발행 에러:', error);
@@ -445,4 +565,4 @@ export async function publishChatMessage(groupId: number, chatData: any) {
   }
 }
 
-export { worker };
+export { worker, historyWorker };

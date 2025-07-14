@@ -1,6 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
+import { Pixel } from '../../pixel/entity/pixel.entity';
 import { GroupUser } from '../../entity/GroupUser.entity';
+import { CanvasHistory } from '../../canvas/entity/canvasHistory.entity';
+import { QuestionUser } from '../../game/entity/question_user.entity';
+import { GameUserResult } from 'src/game/entity/game_result.entity';
 
 @Entity('users')
 export class User {
@@ -27,4 +31,19 @@ export class User {
 
   @OneToMany(() => GroupUser, (gu) => gu.user)
   groupUsers: GroupUser[];
+
+  @OneToMany(() => CanvasHistory, (history) => history.top_participant)
+  top_participant_history: CanvasHistory[];
+
+  @OneToMany(() => CanvasHistory, (history) => history.top_pixel_owner)
+  top_pixel_owner_history: CanvasHistory[];
+
+  @OneToMany(() => QuestionUser, (qu) => qu.user)
+  questionUsers: QuestionUser[];
+
+  @OneToMany(() => GameUserResult, (gu) => gu.user)
+  gameUserResults: GameUserResult[];
+
+  @OneToMany(() => Pixel, (pixel) => pixel.ownerUser)
+  ownedPixels: Pixel[];
 }
