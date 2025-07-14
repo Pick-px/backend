@@ -42,6 +42,7 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(`[tryDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`);
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
@@ -319,6 +320,7 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(`[applyDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`);
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
@@ -334,12 +336,13 @@ export class CanvasService {
     );
 
     if (!is_locked) {
+      console.warn(`[applyDrawPixel] 동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       // 이미 다른 사용자가 락을 선점한 경우
-      console.warn(`동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       return false;
     }
 
     try {
+      console.log(`[applyDrawPixel] 락 획득, tryDrawPixel 호출`);
       // 실제 픽셀 저장
       return await this.tryDrawPixel({ canvas_id, x, y, color, userId });
     } finally {
@@ -387,6 +390,15 @@ export class CanvasService {
     };
   }
 
+  // 캔버스 타입 조회 메서드 추가
+  async getCanvasType(canvas_id: string): Promise<string | null> {
+    if (!canvas_id) return null;
+    const idNum = Number(canvas_id);
+    if (isNaN(idNum)) return null;
+    const meta = await this.canvasRepository.findOneBy({ id: idNum });
+    return meta?.type ?? null;
+  }
+
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({
     canvas_id,
@@ -401,6 +413,11 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<DrawPixelResponse> {
+    // 캔버스 타입 조회
+    const canvasType = await this.getCanvasType(canvas_id);
+    // 게임 모드면 쿨다운 1초, 그 외는 10초
+    const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 10;
+
     // 캔버스 활성 상태 먼저 체크
     const isActive = await this.isCanvasActive(parseInt(canvas_id));
     console.log(
@@ -416,7 +433,6 @@ export class CanvasService {
       };
     }
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 10;
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);

@@ -104,6 +104,7 @@ export class AppGateway
   // 서버 시작 시 이전 소켓 ID들 정리
   private async cleanupOldSockets() {
     try {
+      // 기존 active_sockets 삭제
       const oldSocketCount = await this.redis.scard('active_sockets');
       if (oldSocketCount > 0) {
         await this.redis.del('active_sockets');
@@ -111,8 +112,16 @@ export class AppGateway
           `[AppGateway] 서버 시작 시 이전 소켓 ID ${oldSocketCount}개 정리됨`
         );
       }
+      // canvas:*:sockets 키 모두 삭제
+      const canvasSocketKeys = await this.redis.keys('canvas:*:sockets');
+      if (canvasSocketKeys.length > 0) {
+        await this.redis.del(...canvasSocketKeys);
+        console.log(
+          `[AppGateway] 서버 시작 시 canvas:*:sockets 키 ${canvasSocketKeys.length}개 삭제 완료`
+        );
+      }
     } catch (error) {
-      console.error('[AppGateway] 이전 소켓 정리 중 에러:', error);
+      console.error('[AppGateway] 이전 소켓/canvas 정리 중 에러:', error);
     }
   }
 

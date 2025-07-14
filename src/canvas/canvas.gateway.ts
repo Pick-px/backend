@@ -13,6 +13,7 @@ import { Inject } from '@nestjs/common';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 import { PixelUpdateEvent } from '../interface/PixelInfo.interface';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { GameLogicService } from '../game/game-logic.service';
 
 interface SocketUser {
   id: number;
@@ -36,7 +37,8 @@ export class CanvasGateway implements OnGatewayInit {
   constructor(
     private readonly canvasService: CanvasService,
     @Inject('REDIS_CLIENT')
-    private readonly redis: Redis
+    private readonly redis: Redis,
+    private readonly gameLogicService: GameLogicService, // 게임 특화 로직 주입
   ) {}
 
   afterInit(server: Server) {
@@ -260,5 +262,21 @@ export class CanvasGateway implements OnGatewayInit {
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
     }
+  }
+
+  @SubscribeMessage('send_result')
+  async handleSendResult(
+    @MessageBody() data: { canvas_id: string; x: number; y: number; color: string; result: boolean },
+    @ConnectedSocket() client: Socket
+  ) {
+    console.log('[CanvasGateway] send_result 이벤트 진입', data);
+    const canvasType = await this.canvasService.getCanvasType(data.canvas_id);
+    console.log('[CanvasGateway] 캔버스 타입:', canvasType);
+    if (canvasType === 'game_calculation') {
+      console.log('[CanvasGateway] gameLogicService.handleSendResult 호출');
+      await this.gameLogicService.handleSendResult(data, client, this.server);
+      return;
+    }
+    // (일반/이벤트 캔버스에서는 무시)
   }
 }

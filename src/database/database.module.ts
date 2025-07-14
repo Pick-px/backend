@@ -6,10 +6,10 @@ import { AppDataSource } from '../data-source';
 @Module({
   providers: [
     {
-      provide: DataSource,
+      provide: 'DATA_SOURCE', // 토큰 문자열로 변경경
       useValue: AppDataSource,
     },
   ],
-  exports: [DataSource],
+  exports: ['DATA_SOURCE'],
 })
 export class DatabaseModule {}

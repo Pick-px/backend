@@ -10,7 +10,7 @@ import { CanvasService } from '../canvas.service';
 import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
 
 @Injectable()
-export class EventCanvasStrategy
+export class EventCommonCanvasStrategy
   extends AbstractCanvasStrategy
   implements CanvasCreationStrategy
 {
@@ -30,7 +30,7 @@ export class EventCanvasStrategy
 
     const canvas = this.canvasRepository.create({
       title,
-      type: 'event',
+      type: 'event_common',
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),

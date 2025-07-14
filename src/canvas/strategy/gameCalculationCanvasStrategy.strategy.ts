@@ -10,7 +10,7 @@ import { GroupService } from '../../group/group.service';
 import { CanvasService } from '../canvas.service';
 
 @Injectable()
-export class GameCanvasStrategy
+export class GameCalculationCanvasStrategy
   extends AbstractCanvasStrategy
   implements CanvasCreationStrategy
 {
@@ -28,7 +28,7 @@ export class GameCanvasStrategy
     const { title, size_x, size_y, startedAt, endedAt } = createCanvasDto;
     const canvas = this.canvasRepository.create({
       title,
-      type: 'game',
+      type: 'game_calculation',
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),

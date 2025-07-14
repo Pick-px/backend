@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS game_user_result (
     canvas_id INTEGER NOT NULL,
     rank INTEGER,
     assigned_color VARCHAR(7),
+    life INTEGER DEFAULT 2,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE,

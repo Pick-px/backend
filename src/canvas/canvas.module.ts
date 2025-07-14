@@ -17,12 +17,14 @@ import { redisConnection } from '../queues/bullmq.config';
 import { GroupModule } from '../group/group.module';
 import { PixelModule } from '../pixel/pixel.module';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
-import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
-import { EventCanvasStrategy } from './strategy/eventCanvasStrategy.strategy';
-import { GameCanvasStrategy } from './strategy/gameCanvasStrategy.strategy';
 import { CanvasHistoryService } from './canvas-history.service';
 import { GalleryController } from './gallery.controller';
 import { UserModule } from '../user/user.module';
+import { GameModule } from '../game/game.module';
+import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
+import { GameCalculationCanvasStrategy } from './strategy/gameCalculationCanvasStrategy.strategy';
+import { EventCommonCanvasStrategy } from './strategy/eventCommonCanvasStrategy.strategy';
+import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasStrategy.strategy';
 
 @Module({
   imports: [
@@ -48,6 +50,7 @@ import { UserModule } from '../user/user.module';
     }),
     GroupModule,
     PixelModule,
+    forwardRef(() => GameModule), // GameModule 추가
   ],
   controllers: [CanvasController, GalleryController],
   providers: [
@@ -55,8 +58,9 @@ import { UserModule } from '../user/user.module';
     CanvasGateway,
     CanvasStrategyFactory,
     PublicCanvasStrategy,
-    GameCanvasStrategy,
-    EventCanvasStrategy,
+    GameCalculationCanvasStrategy,
+    EventCommonCanvasStrategy,
+    EventColorLimitCanvasStrategy,
     CanvasHistoryService,
   ],
   exports: [CanvasService, BullModule, CanvasHistoryService],
