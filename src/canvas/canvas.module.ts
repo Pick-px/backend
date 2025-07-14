@@ -7,6 +7,8 @@ import { CanvasController } from './canvas.controller';
 import { CanvasGateway } from './canvas.gateway';
 import { Group } from '../group/entity/group.entity'; // 추가
 import { UserCanvas } from '../entity/UserCanvas.entity';
+import { CanvasHistory } from './entity/canvas-history.entity';
+import { User } from '../user/entity/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
 import { BullModule } from '@nestjs/bull';
@@ -17,10 +19,12 @@ import { CanvasStrategyFactory } from './strategy/createFactory.factory';
 import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
 import { EventCanvasStrategy } from './strategy/eventCanvasStrategy.strategy';
 import { GameCanvasStrategy } from './strategy/gameCanvasStrategy.strategy';
+import { CanvasHistoryService } from './canvas-history.service';
+import { GalleryController } from './gallery.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas]),
+    TypeOrmModule.forFeature([Canvas, Pixel, Group, UserCanvas, CanvasHistory, User]),
     JwtModule.register({}),
     AuthModule,
     BullModule.registerQueueAsync({
@@ -33,7 +37,7 @@ import { GameCanvasStrategy } from './strategy/gameCanvasStrategy.strategy';
     GroupModule,
     PixelModule,
   ],
-  controllers: [CanvasController],
+  controllers: [CanvasController, GalleryController],
   providers: [
     CanvasService,
     CanvasGateway,
@@ -41,7 +45,8 @@ import { GameCanvasStrategy } from './strategy/gameCanvasStrategy.strategy';
     PublicCanvasStrategy,
     GameCanvasStrategy,
     EventCanvasStrategy,
+    CanvasHistoryService,
   ],
-  exports: [CanvasService, BullModule],
+  exports: [CanvasService, BullModule, CanvasHistoryService],
 })
 export class CanvasModule {}

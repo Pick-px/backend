@@ -507,7 +507,7 @@ export class CanvasService {
     }
   }
 
-  // user_canvas 테이블의 count를 1씩 증가시키는 메서드
+  // user_canvas 테이블의 try_count를 1씩 증가시키는 메서드
   private async incrementUserCanvasCount(
     userId: number,
     canvasId: number
@@ -522,25 +522,25 @@ export class CanvasService {
       });
 
       if (userCanvas) {
-        // 기존 레코드가 있으면 count를 1 증가
-        userCanvas.count += 1;
+        // 기존 레코드가 있으면 try_count를 1 증가
+        userCanvas.tryCount += 1;
         await this.userCanvasRepository.save(userCanvas);
       } else {
-        // 레코드가 없으면 새로 생성 (count = 1)
+        // 레코드가 없으면 새로 생성 (try_count = 1)
         userCanvas = this.userCanvasRepository.create({
           user: { id: userId },
           canvas: { id: canvasId },
-          count: 1,
+          tryCount: 1,
           joinedAt: new Date(),
         });
         await this.userCanvasRepository.save(userCanvas);
       }
 
       console.log(
-        `사용자 ${userId}의 캔버스 ${canvasId} 카운트 증가: ${userCanvas.count}`
+        `사용자 ${userId}의 캔버스 ${canvasId} try_count 증가: ${userCanvas.tryCount}`
       );
     } catch (error) {
-      console.error('user_canvas 카운트 증가 중 오류:', error);
+      console.error('user_canvas try_count 증가 중 오류:', error);
       throw error;
     }
   }
