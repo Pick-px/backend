@@ -496,7 +496,7 @@ export class GroupService {
     await this.groupRepository.save(group);
   }
 
-  async generateDefaultGruop(canvas: Canvas) {
+  async generateDefaultGruop(canvas: Canvas): Promise<Group> {
     return await this.groupRepository.save({
       name: '전체',
       createdAt: canvas.createdAt,

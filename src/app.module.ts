@@ -20,6 +20,11 @@ import { AppGateway } from './app.gateway';
 import { AwsModule } from './aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PixelModule } from './pixel/pixel.module';
+import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
+import { ImageHistory } from './canvas/entity/imageHistory.entity';
+import { Question } from './entity/questions.entity';
+import { QuestionUser } from './game/entity/question_user.entity';
+import { GameUserResult } from './game/entity/game_result.entity';
 
 @Module({
   imports: [
@@ -44,7 +49,19 @@ import { PixelModule } from './pixel/pixel.module';
             type: 'postgres',
             url: databaseUrl,
             autoLoadEntities: true,
-            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            entities: [
+              User,
+              Canvas,
+              UserCanvas,
+              Pixel,
+              Group,
+              GroupUser,
+              CanvasHistory,
+              ImageHistory,
+              Question,
+              QuestionUser,
+              GameUserResult,
+            ],
             synchronize: false, // 프로덕션에서는 false
             ssl:
               process.env.NODE_ENV === 'production'
@@ -64,7 +81,19 @@ import { PixelModule } from './pixel/pixel.module';
             password: configService.get<string>('POSTGRES_PASSWORD'),
             database: configService.get<string>('POSTGRES_DB'),
             autoLoadEntities: true,
-            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            entities: [
+              User,
+              Canvas,
+              UserCanvas,
+              Pixel,
+              Group,
+              GroupUser,
+              CanvasHistory,
+              ImageHistory,
+              GameUserResult,
+              Question,
+              QuestionUser,
+            ],
             synchronize: false, // 개발에서도 false로 설정
           };
         }
@@ -88,7 +117,7 @@ import { PixelModule } from './pixel/pixel.module';
     // Gateway 초기화 순서 보장
     {
       provide: 'GATEWAY_INITIALIZATION',
-      useFactory: async (appGateway: AppGateway) => {
+      useFactory: (appGateway: AppGateway) => {
         console.log('[AppModule] Gateway 초기화 순서 보장');
         return appGateway;
       },

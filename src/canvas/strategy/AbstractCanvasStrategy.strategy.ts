@@ -2,11 +2,13 @@
 import { Canvas } from '../entity/canvas.entity';
 import { PixelService } from '../../pixel/pixel.service';
 import { GroupService } from '../../group/group.service';
+import { CanvasService } from '../canvas.service';
 import { historyQueue } from '../../queues/bullmq.queue';
 
 export abstract class AbstractCanvasStrategy {
   constructor(
     protected readonly pixelService: PixelService,
+    private readonly canvasService: CanvasService,
     protected readonly groupService: GroupService
   ) {}
 
@@ -14,6 +16,7 @@ export abstract class AbstractCanvasStrategy {
     await this.pixelService.generatePixel(canvas);
     const defaultGroup = await this.groupService.generateDefaultGruop(canvas);
     await this.groupService.setGroupMadeBy(defaultGroup, 1, canvas.id);
+    await this.canvasService.generateCanvasHistory(canvas);
   }
 
   async isEndingWithOneDay(canvas: Canvas) {
