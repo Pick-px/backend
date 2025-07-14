@@ -18,6 +18,13 @@ import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AppGateway } from './app.gateway';
 import { AwsModule } from './aws/aws.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { PixelModule } from './pixel/pixel.module';
+import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
+import { ImageHistory } from './canvas/entity/imageHistory.entity';
+import { Question } from './entity/questions.entity';
+import { QuestionUser } from './game/entity/question_user.entity';
+import { GameUserResult } from './game/entity/game_result.entity';
 
 @Module({
   imports: [
@@ -29,12 +36,11 @@ import { AwsModule } from './aws/aws.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
-        
-        // 환경변수 디버깅 로그
-        console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
-        console.log('[DB] DATABASE_URL 존재:', !!databaseUrl);
         if (databaseUrl) {
-          console.log('[DB] DATABASE_URL 사용 (마스킹):', databaseUrl.replace(/\/\/.*@/, '//***@'));
+          console.log(
+            '[DB] DATABASE_URL 사용 (마스킹):',
+            databaseUrl.replace(/\/\/.*@/, '//***@')
+          );
         }
 
         if (databaseUrl) {
@@ -43,7 +49,19 @@ import { AwsModule } from './aws/aws.module';
             type: 'postgres',
             url: databaseUrl,
             autoLoadEntities: true,
-            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            entities: [
+              User,
+              Canvas,
+              UserCanvas,
+              Pixel,
+              Group,
+              GroupUser,
+              CanvasHistory,
+              ImageHistory,
+              Question,
+              QuestionUser,
+              GameUserResult,
+            ],
             synchronize: false, // 프로덕션에서는 false
             ssl:
               process.env.NODE_ENV === 'production'
@@ -63,13 +81,26 @@ import { AwsModule } from './aws/aws.module';
             password: configService.get<string>('POSTGRES_PASSWORD'),
             database: configService.get<string>('POSTGRES_DB'),
             autoLoadEntities: true,
-            entities: [User, Canvas, UserCanvas, Pixel, Group, GroupUser],
+            entities: [
+              User,
+              Canvas,
+              UserCanvas,
+              Pixel,
+              Group,
+              GroupUser,
+              CanvasHistory,
+              ImageHistory,
+              GameUserResult,
+              Question,
+              QuestionUser,
+            ],
             synchronize: false, // 개발에서도 false로 설정
           };
         }
       },
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     CanvasModule,
     DatabaseModule,
@@ -78,14 +109,15 @@ import { AwsModule } from './aws/aws.module';
     GroupModule,
     HttpModule,
     AwsModule,
+    PixelModule,
   ],
   controllers: [AppController],
   providers: [
-    AppService, 
+    AppService,
     // Gateway 초기화 순서 보장
     {
       provide: 'GATEWAY_INITIALIZATION',
-      useFactory: async (appGateway: AppGateway) => {
+      useFactory: (appGateway: AppGateway) => {
         console.log('[AppModule] Gateway 초기화 순서 보장');
         return appGateway;
       },

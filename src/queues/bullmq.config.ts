@@ -1,5 +1,4 @@
 import { RedisOptions } from 'ioredis';
-import { Redis } from 'ioredis';
 
 export const redisConnection: RedisOptions = {
   host: process.env.REDIS_HOST || 'redis',
@@ -7,10 +6,5 @@ export const redisConnection: RedisOptions = {
   password: process.env.REDIS_PASSWORD || undefined,
   lazyConnect: true,
   connectTimeout: 10000,
-  commandTimeout: 5000,
+  commandTimeout: 20000,
 };
-
-let redis: Redis;
-
-// Redis 연결 - bullmq.config.ts의 설정 사용
-redis = new Redis(redisConnection);

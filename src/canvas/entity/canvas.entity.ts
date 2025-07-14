@@ -1,6 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { UserCanvas } from '../../entity/UserCanvas.entity';
 import { Group } from '../../group/entity/group.entity';
+import { GameUserResult } from '../../game/entity/game_result.entity';
+import { CanvasHistory } from './canvasHistory.entity';
 @Entity('canvases')
 export class Canvas {
   @PrimaryGeneratedColumn()
@@ -11,14 +19,19 @@ export class Canvas {
 
   @Column({
     type: 'text',
-    enum: ['public', 'event'],
+    enum: ['public', 'event', 'game'],
   })
-  type: 'public' | 'event';
+  type: 'public' | 'event' | 'game';
 
   @Column({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', name: 'started_at', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'timestamp',
+    name: 'started_at',
+    nullable: true,
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   startedAt: Date;
 
   @Column({ type: 'timestamp', name: 'ended_at', nullable: true })
@@ -29,6 +42,12 @@ export class Canvas {
 
   @Column({ name: 'size_y' })
   sizeY: number;
+
+  @OneToOne(() => CanvasHistory, (ch) => ch.canvas)
+  canvasHistory: CanvasHistory;
+
+  @OneToMany(() => GameUserResult, (gu) => gu.canvas)
+  gameUserResults: GameUserResult[];
 
   @OneToMany(() => UserCanvas, (uc) => uc.canvas)
   canvasUseres: UserCanvas[];

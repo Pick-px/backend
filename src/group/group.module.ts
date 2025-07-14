@@ -29,7 +29,7 @@ import { AwsModule } from '../aws/aws.module';
   ],
   providers: [GroupService, GroupGateway],
   controllers: [GroupController],
-  exports: [GroupService, TypeOrmModule],
+  exports: [GroupService],
 })
 export class GroupModule {
   constructor(private readonly groupService: GroupService) {

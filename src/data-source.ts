@@ -8,6 +8,11 @@ import { Group } from './group/entity/group.entity';
 import { Chat } from './group/entity/chat.entity';
 import { GroupUser } from './entity/GroupUser.entity';
 import * as dotenv from 'dotenv';
+import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
+import { ImageHistory } from './canvas/entity/imageHistory.entity';
+import { Question } from './entity/questions.entity';
+import { QuestionUser } from './game/entity/question_user.entity';
+import { GameUserResult } from './game/entity/game_result.entity';
 
 dotenv.config();
 
@@ -31,7 +36,20 @@ export const AppDataSource = new DataSource({
         database: process.env.POSTGRES_DB,
         ssl: false, // SSL 명시적 비활성화
       }),
-  entities: [Canvas, Pixel, UserCanvas, User, Group, Chat, GroupUser],
+  entities: [
+    Canvas,
+    Pixel,
+    UserCanvas,
+    User,
+    Group,
+    Chat,
+    GroupUser,
+    CanvasHistory,
+    ImageHistory,
+    Question,
+    QuestionUser,
+    GameUserResult,
+  ],
   synchronize: false,
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'migrations',
