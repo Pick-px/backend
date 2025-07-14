@@ -225,6 +225,11 @@ export class UserService {
         ended_at: uc.canvas.endedAt,
         size_x: uc.canvas.sizeX,
         size_y: uc.canvas.sizeY,
+        try_count: uc.tryCount,
+        own_count:
+          uc.canvas.endedAt && uc.canvas.type !== 'public'
+            ? uc.ownCount
+            : null,
       }));
       return {
         email: user.email,
