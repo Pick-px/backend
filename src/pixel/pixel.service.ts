@@ -5,7 +5,7 @@ import { Canvas } from '../canvas/entity/canvas.entity';
 export class PixelService {
   constructor() {}
 
-  async generatePixel(canvas: Canvas) {
+  async generatePixel(canvas: Canvas): Promise<void> {
     await pixelQueue.add('pixel-generation', {
       canvas_id: canvas.id,
       size_x: canvas.sizeX,

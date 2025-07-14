@@ -26,7 +26,6 @@ create table if not exists canvases
     ended_at   timestamp   default null,
     size_x     integer     not null,
     size_y     integer     not null,
-    url varchar(1024),
     primary key (id)
 );
 
@@ -83,7 +82,7 @@ create table if not exists groups
     name      varchar(20) not null,
     created_at timestamp    not null,
     updated_at timestamp    not null,
-    max_participants int not null check (max_participants >= 1 and max_participants <= 100),
+    max_participants int not null check (max_participants >= 1 and max_participants <= 200),
     current_participants_count int not null default 1,
     canvas_id bigint not null,
     made_by bigint not null,
@@ -143,3 +142,57 @@ alter table chats
 INSERT INTO users (email, password, created_at, updated_at, user_name)
 VALUES ('pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
 ON CONFLICT (email) DO NOTHING; 
+
+CREATE TABLE IF NOT EXISTS canvas_history (
+    canvas_id INTEGER PRIMARY KEY,
+    participant_count INTEGER NOT NULL DEFAULT 1,
+    attempt_count INTEGER NOT NULL DEFAULT 1,
+    top_participant_id BIGINT,
+    top_participant_attempts INTEGER,
+    top_pixel_owner_id BIGINT,
+    top_pixel_count INTEGER,
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id),
+    FOREIGN KEY (top_participant_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (top_pixel_owner_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 캔버스 이미지 상태 스냅샷 저장 테이블
+CREATE TABLE IF NOT EXISTS image_history (
+    id bigserial PRIMARY KEY,
+    canvas_history_id INTEGER NOT NULL,
+    image_url VARCHAR(1024) NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (canvas_history_id) REFERENCES canvas_history(canvas_id) ON DELETE CASCADE
+);
+
+-- 문제 은행
+CREATE TABLE IF NOT EXISTS questions (
+    id bigserial PRIMARY KEY,
+    content TEXT NOT NULL,
+    answer INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS question_user (
+    id bigserial PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    submitted_answer INTEGER,
+    is_correct BOOLEAN NOT NULL,
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+-- 게임 캔버스에 참여한 유저들의 최종 결과 정보
+CREATE TABLE IF NOT EXISTS game_user_result (
+    id bigserial PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    canvas_id INTEGER NOT NULL,
+    rank INTEGER,
+    assigned_color VARCHAR(7),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE,
+    UNIQUE (user_id, canvas_id)
+);

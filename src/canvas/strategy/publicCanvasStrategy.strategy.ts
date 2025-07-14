@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CanvasCreationStrategy } from '../interface/canvasCreateStrategy.interface';
 import { Repository } from 'typeorm';
@@ -7,6 +7,7 @@ import { GroupService } from '../../group/group.service';
 import { PixelService } from '../../pixel/pixel.service';
 import { createCanvasDto } from '../dto/create_canvas_dto.dto';
 import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
+import { CanvasService } from '../canvas.service';
 @Injectable()
 export class PublicCanvasStrategy
   extends AbstractCanvasStrategy
@@ -16,9 +17,11 @@ export class PublicCanvasStrategy
     @InjectRepository(Canvas)
     private readonly canvasRepository: Repository<Canvas>,
     groupService: GroupService,
+    @Inject(forwardRef(() => CanvasService))
+    canvasService: CanvasService,
     pixelService: PixelService
   ) {
-    super(pixelService, groupService);
+    super(pixelService, canvasService, groupService);
   }
 
   async create(createCanvasDto: createCanvasDto): Promise<Canvas> {

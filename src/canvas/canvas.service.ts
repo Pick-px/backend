@@ -4,14 +4,12 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import Redis from 'ioredis';
-import { historyQueue } from '../queues/bullmq.queue';
 import { Group } from '../group/entity/group.entity';
-import { GroupUser } from '../entity/GroupUser.entity';
-import { User } from '../user/entity/user.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 import { PixelInfo } from '../interface/PixelInfo.interface';
+import { CanvasHistory } from './entity/canvasHistory.entity';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
 
 @Injectable()
@@ -19,8 +17,8 @@ export class CanvasService {
   constructor(
     @InjectRepository(Canvas)
     private readonly canvasRepository: Repository<Canvas>,
-    @InjectRepository(Group)
-    private readonly groupRepository: Repository<Group>,
+    @InjectRepository(CanvasHistory)
+    private readonly historyRepository: Repository<CanvasHistory>,
     @InjectRepository(UserCanvas)
     private readonly userCanvasRepository: Repository<UserCanvas>,
     @Inject('REDIS_CLIENT')
@@ -47,7 +45,7 @@ export class CanvasService {
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
-      
+
       // color와 owner 정보만 저장 (최적화)
       const pixelData = `${color}|${userId}`;
       // Pipeline으로 3개 명령을 한 번에 처리
@@ -58,7 +56,9 @@ export class CanvasService {
 
       await pipeline.exec();
 
-      console.log(`Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color} ${userId}`);
+      console.log(
+        `Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color} ${userId}`
+      );
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
@@ -67,21 +67,24 @@ export class CanvasService {
   }
 
   // Redis에서 픽셀 조회
-  async getPixelsFromRedis(
-    canvas_id: string
-  ): Promise<PixelInfo[]> {
+  async getPixelsFromRedis(canvas_id: string): Promise<PixelInfo[]> {
     console.time('fromRedis');
     const hash = await this.redisClient.hgetall(`canvas:${canvas_id}`);
     console.timeEnd('fromRedis');
-    const pixels: { x: number; y: number; color: string; owner: number | null }[] = [];
+    const pixels: {
+      x: number;
+      y: number;
+      color: string;
+      owner: number | null;
+    }[] = [];
     console.time('push');
     for (const key in hash) {
       const [x, y] = key.split(':').map(Number);
       const value = hash[key];
-      
+
       let color: string;
       let owner: number | null = null;
-      
+
       if (value.includes('|')) {
         // 새로운 파이프로 구분된 형태 처리
         const [colorPart, ownerPart] = value.split('|');
@@ -92,7 +95,7 @@ export class CanvasService {
         color = value;
         owner = null;
       }
-      
+
       pixels.push({ x, y, color, owner });
     }
     console.timeEnd('push');
@@ -100,16 +103,18 @@ export class CanvasService {
   }
 
   // DB에서 픽셀 조회
-  async getPixelsFromDB(
-    canvas_id: string
-  ): Promise<PixelInfo[]> {
+  async getPixelsFromDB(canvas_id: string): Promise<PixelInfo[]> {
     console.time('fromdb');
     try {
-      const dbPixels: { x: number; y: number; color: string; owner: number | null }[] =
-        await this.dataSource.query(
-          'SELECT x, y, color, owner FROM pixels WHERE canvas_id = $1::INTEGER',
-          [canvas_id]
-        );
+      const dbPixels: {
+        x: number;
+        y: number;
+        color: string;
+        owner: number | null;
+      }[] = await this.dataSource.query(
+        'SELECT x, y, color, owner FROM pixels WHERE canvas_id = $1::INTEGER',
+        [canvas_id]
+      );
       return dbPixels;
     } finally {
       console.timeEnd('fromdb');
@@ -117,9 +122,7 @@ export class CanvasService {
   }
 
   // 통합: Redis 우선, 없으면 DB + Redis 캐싱
-  async getAllPixels(
-    canvas_id?: string
-  ): Promise<PixelInfo[]> {
+  async getAllPixels(canvas_id?: string): Promise<PixelInfo[]> {
     let realCanvasId = canvas_id;
 
     if (!realCanvasId) {
@@ -148,11 +151,11 @@ export class CanvasService {
     }
     await pipeline.exec();
     // DB 픽셀을 반환 형식에 맞게 변환
-    return dbPixels.map(pixel => ({
+    return dbPixels.map((pixel) => ({
       x: pixel.x,
       y: pixel.y,
       color: pixel.color,
-      owner: pixel.owner
+      owner: pixel.owner,
     }));
   }
 
@@ -170,7 +173,7 @@ export class CanvasService {
 
       if (value) {
         let color: string;
-        
+
         if (value.includes('|')) {
           // 새로운 파이프로 구분된 형태 처리
           const [colorPart] = value.split('|');
@@ -179,7 +182,7 @@ export class CanvasService {
           // 기존 color만 저장된 형태 처리 (하위 호환성)
           color = value;
         }
-        
+
         console.log(`Redis: 픽셀 조회 성공: ${key} = ${color}`);
         return color;
       }
@@ -230,22 +233,11 @@ export class CanvasService {
     }
   }
 
-  // async isEndingWithOneDay(canvas: Canvas) {
-  //   const now = Date.now();
-  //   const endedAtTime = new Date(canvas.endedAt).getTime();
-  //   const delay = endedAtTime - now;
-
-  //   // 1일 이내 종료되는 경우 → 큐에 바로 등록
-  //   const THREE_DAYS = 1000 * 60 * 60 * 24 * 1;
-  //   const jobId = `history-${canvas.id}`;
-  //   if (delay > 0 && delay <= THREE_DAYS && canvas.type != 'public') {
-  //     await historyQueue.add(
-  //       'canvas-history',
-  //       { canvas_id: canvas.id },
-  //       { jobId: jobId, delay }
-  //     );
-  //   }
-  // }
+  async generateCanvasHistory(canvas: Canvas): Promise<void> {
+    await this.historyRepository.save({
+      canvas_id: canvas.id,
+    });
+  }
   async findCanvasesEndingWithinDays(day: number) {
     const days = day;
     const canvas: Canvas[] = await this.dataSource.query(

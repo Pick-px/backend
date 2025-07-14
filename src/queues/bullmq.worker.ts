@@ -10,17 +10,22 @@ import { Canvas } from '../canvas/entity/canvas.entity';
 import { generatorPixelToImg } from '../util/imageGenerator.util';
 import { randomUUID } from 'crypto';
 import { uploadBufferToS3 } from '../util/s3UploadFile.util';
+import { ImageHistory } from '../canvas/entity/imageHistory.entity';
+import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
 
 config();
 
 const canvasRepository = AppDataSource.getRepository(Canvas);
 const pixelRepository = AppDataSource.getRepository(Pixel);
+const historyRepository = AppDataSource.getRepository(CanvasHistory);
+const imgRepository = AppDataSource.getRepository(ImageHistory);
 
 const historyWorker = new Worker(
   'canvas-history',
   async (job) => {
     console.time('history start');
     const { canvas_id } = job.data;
+    console.log(canvas_id);
     const canvas = await canvasRepository.findOne({
       where: { id: Number(canvas_id) },
     });
@@ -40,9 +45,18 @@ const historyWorker = new Worker(
     const key = `history/${canvas_id}/${randomUUID()}.png`;
     await uploadBufferToS3(buffer, key, contentType);
     console.timeEnd('history start');
-    canvas.url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-    // await canvasRepository.createQueryBuilder().update(Canvas);
-    await canvasRepository.save(canvas);
+
+    const history = await historyRepository.findOne({
+      where: { canvas_id: Number(canvas_id) },
+    });
+
+    if (!history) throw new Error('CanvasHistory not found');
+
+    await imgRepository.save({
+      canvasHistory: history,
+      image_url: key,
+      captured_at: new Date(),
+    });
   },
   {
     concurrency: 4,
@@ -78,8 +92,6 @@ const PIXEL_BATCH_SIZE = 600; // 픽셀 배치 크기
 const CHAT_BATCH_SIZE = 100; // 채팅 배치 크기
 const BATCH_TIMEOUT_MS = 5000; // 10초
 
-
-
 // 픽셀 변경사항을 배치에 추가 (전체 통합 + 중복 제거)
 async function addPixelToBatch(
   canvasId: number,
@@ -88,7 +100,6 @@ async function addPixelToBatch(
   color: string,
   owner: number | null = null
 ) {
-
   // 기존 같은 픽셀 제거 (최신 색상만 유지)
   const pixelKey = `${canvasId}:${x}:${y}`;
   for (const existingPixel of pixelBatchQueue) {
@@ -132,10 +143,7 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
     const CHUNK_SIZE = 200;
 
     // 캔버스별로 그룹화
-    const canvasGroups = new Map<
-      number,
-      Array<PixelInfo>
-    >();
+    const canvasGroups = new Map<number, Array<PixelInfo>>();
 
     for (const pixelData of pixelBatchQueue) {
       const [canvasId, x, y, color, owner] = pixelData.split(':');
@@ -147,7 +155,12 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
         x: Number(x),
         y: Number(y),
         color,
-        owner: owner === undefined || owner === null || (typeof owner === 'string' && owner === '') ? null : Number(owner),
+        owner:
+          owner === undefined ||
+          owner === null ||
+          (typeof owner === 'string' && owner === '')
+            ? null
+            : Number(owner),
       });
     }
 
@@ -181,14 +194,18 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
             const colorIdx = chunk.length * 3 + idx * 3 + 1;
             const ownerIdx = chunk.length * 3 + idx * 3 + 2;
             const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
-            
+
             // CASE 조건에 색상, owner, updated_at 파라미터 추가
             caseClauseParts.push(
               `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN $${colorIdx}`
             );
             values.push(
               p.color,
-              p.owner === null || p.owner === undefined || (typeof p.owner === 'string' && p.owner === '') ? null : Number(p.owner),
+              p.owner === null ||
+                p.owner === undefined ||
+                (typeof p.owner === 'string' && p.owner === '')
+                ? null
+                : Number(p.owner),
               new Date().toISOString()
             );
           });
@@ -199,18 +216,22 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
               ${caseClauseParts.join('\n')}
             END,
             owner = CASE
-              ${caseClauseParts.map((_, idx) => {
-                const baseIdx = idx * 3;
-                const ownerIdx = chunk.length * 3 + idx * 3 + 2;
-                return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${ownerIdx} AS BIGINT)`;
-              }).join('\n')}
+              ${caseClauseParts
+                .map((_, idx) => {
+                  const baseIdx = idx * 3;
+                  const ownerIdx = chunk.length * 3 + idx * 3 + 2;
+                  return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${ownerIdx} AS BIGINT)`;
+                })
+                .join('\n')}
             END,
             updated_at = CASE
-              ${caseClauseParts.map((_, idx) => {
-                const baseIdx = idx * 3;
-                const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
-                return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${updatedAtIdx} AS TIMESTAMP)`;
-              }).join('\n')}
+              ${caseClauseParts
+                .map((_, idx) => {
+                  const baseIdx = idx * 3;
+                  const updatedAtIdx = chunk.length * 3 + idx * 3 + 3;
+                  return `WHEN canvas_id = $${baseIdx + 1} AND x = $${baseIdx + 2} AND y = $${baseIdx + 3} THEN CAST($${updatedAtIdx} AS TIMESTAMP)`;
+                })
+                .join('\n')}
             END
             WHERE (canvas_id, x, y) IN (${whereClauseParts.join(', ')})
           `;
@@ -436,10 +457,18 @@ void (async () => {
       async (job) => {
         try {
           const start = Date.now();
-          const { canvas_id, size_x, size_y, startedAt, endedAt, created_at, updated_at } =
-            job.data;
+          const {
+            canvas_id,
+            size_x,
+            size_y,
+            startedAt,
+            endedAt,
+            created_at,
+            updated_at,
+          } = job.data;
           console.log(
-            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`          );
+            `[Worker] Job 시작: canvas_id=${canvas_id}, size=${size_x}x${size_y}`
+          );
           const pixels: Pixel[] = [];
           for (let y = 0; y < size_y; y++) {
             for (let x = 0; x < size_x; x++) {
@@ -537,4 +566,3 @@ export async function publishChatMessage(groupId: number, chatData: any) {
 }
 
 export { worker, historyWorker };
-
