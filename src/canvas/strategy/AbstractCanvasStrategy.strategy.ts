@@ -31,7 +31,12 @@ export abstract class AbstractCanvasStrategy {
     if (delay > 0 && delay <= ONE_DAYS) {
       await historyQueue.add(
         'canvas-history',
-        { canvas_id: canvas.id, size_x: canvas.sizeX, size_y: canvas.sizeY },
+        {
+          canvas_id: canvas.id,
+          size_x: canvas.sizeX,
+          size_y: canvas.sizeY,
+          type: canvas.type,
+        },
         { jobId: jobId, delay }
       );
     }

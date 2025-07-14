@@ -32,10 +32,10 @@ export class User {
   @OneToMany(() => GroupUser, (gu) => gu.user)
   groupUsers: GroupUser[];
 
-  @OneToMany(() => CanvasHistory, (history) => history.top_participant)
+  @OneToMany(() => CanvasHistory, (history) => history.topTryUser)
   top_participant_history: CanvasHistory[];
 
-  @OneToMany(() => CanvasHistory, (history) => history.top_pixel_owner)
+  @OneToMany(() => CanvasHistory, (history) => history.topOwnUser)
   top_pixel_owner_history: CanvasHistory[];
 
   @OneToMany(() => QuestionUser, (qu) => qu.user)
