@@ -27,7 +27,7 @@ const historyQueue = new Queue('canvas-history', {
   },
 });
 
-const startQueue = new Queue('canvas-start', {
+const alarmQueue = new Queue('canvas-alarm', {
   connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: true,
@@ -39,4 +39,4 @@ const startQueue = new Queue('canvas-start', {
   },
 });
 
-export { pixelQueue, historyQueue, startQueue };
+export { pixelQueue, historyQueue, alarmQueue };
