@@ -4,7 +4,7 @@ import { Pixel } from '../../pixel/entity/pixel.entity';
 import { GroupUser } from '../../entity/GroupUser.entity';
 import { CanvasHistory } from '../../canvas/entity/canvasHistory.entity';
 import { QuestionUser } from '../../game/entity/question_user.entity';
-import { GameUserResult } from 'src/game/entity/game_result.entity';
+import { GameUserResult } from '../../game/entity/game_result.entity';
 
 @Entity('users')
 export class User {
