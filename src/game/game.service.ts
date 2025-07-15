@@ -8,7 +8,7 @@ import { GameUserResult } from '../game/entity/game_result.entity';
 import { QuestionUser } from './entity/question_user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { QuestionDto, GameResponseData } from './dto/waitingResponse.dto';
+import { QuestionDto, GameResponseData, Size } from './dto/waitingResponse.dto';
 import { CanvasService } from '../canvas/canvas.service';
 
 @Injectable()
@@ -49,6 +49,7 @@ export class GameService {
     res.title = canvas.metaData?.title;
     res.type = canvas.metaData?.type;
     res.questions = questions;
+    res.canvasSize = new Size();
     res.canvasSize.width = canvas.metaData?.sizeX;
     res.canvasSize.height = canvas.metaData?.sizeY;
     return res;

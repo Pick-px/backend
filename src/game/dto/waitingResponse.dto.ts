@@ -24,4 +24,4 @@ class Size {
   width: number;
   height: number;
 }
-export { WaitingResponseDto, QuestionDto, GameResponseData };
+export { WaitingResponseDto, QuestionDto, GameResponseData, Size };
