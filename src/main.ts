@@ -4,7 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Express } from 'express';
 import * as dotenv from 'dotenv';
-import './worker/start.worker';
+import './worker/alarm.worker';
 import { ValidationPipe } from '@nestjs/common';
 const cookieParser = require('cookie-parser');
 
