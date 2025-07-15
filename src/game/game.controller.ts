@@ -23,7 +23,7 @@ export class GameController {
       const user_id = req.user?._id;
       console.log(`[GameController] 유저 정보: userId=${user_id}`);
       
-      const color = generatorColor();
+      const color = generatorColor(1000);
       console.log(`[GameController] 색 생성: color=${color}`);
       
       const questions: QuestionDto[] = await this.gameService.getQuestions();

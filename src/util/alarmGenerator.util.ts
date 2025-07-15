@@ -105,9 +105,30 @@ async function putJobOnAlarmQueue3SecsBeforeStart(canvas: Canvas) {
   }
 }
 
+async function putJobOnAlarmQueueGameEnd(canvas: Canvas) {
+  if (canvas.type !== 'game_calculation') return;
+  const now = Date.now();
+  const endedAtTime = new Date(canvas.endedAt).getTime();
+  const delay = endedAtTime - now;
+  const ONE_DAYS = 1000 * 60 * 60 * 24 * 1;
+  const jobId = `game-end-${canvas.id}`;
+  if (delay > 0 && delay <= ONE_DAYS) {
+    await alarmQueue.add(
+      'game-end',
+      {
+        canvas_id: canvas.id,
+        title: canvas.title,
+        endedAt: canvas.endedAt,
+      },
+      { jobId: jobId, delay }
+    );
+  }
+}
+
 export {
   putJobOnAlarmQueue3SecsBeforeStart,
   putJobOnAlarmQueueBeforeStart30s,
   putJobOnAlarmQueueThreeSecBeforeEnd,
   isEndingWithOneDay,
+  putJobOnAlarmQueueGameEnd,
 };

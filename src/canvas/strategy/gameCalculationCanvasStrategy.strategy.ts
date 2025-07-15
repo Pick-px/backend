@@ -13,6 +13,7 @@ import {
   putJobOnAlarmQueue3SecsBeforeStart,
   putJobOnAlarmQueueBeforeStart30s,
   putJobOnAlarmQueueThreeSecBeforeEnd,
+  putJobOnAlarmQueueGameEnd,
 } from '../../util/alarmGenerator.util';
 
 @Injectable()
@@ -47,6 +48,7 @@ export class GameCalculationCanvasStrategy
     await putJobOnAlarmQueueBeforeStart30s(newCanvas);
     await putJobOnAlarmQueue3SecsBeforeStart(newCanvas);
     await putJobOnAlarmQueueThreeSecBeforeEnd(newCanvas);
+    await putJobOnAlarmQueueGameEnd(newCanvas);
     return newCanvas;
   }
 }

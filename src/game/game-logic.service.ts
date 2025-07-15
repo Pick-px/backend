@@ -219,7 +219,7 @@ export class GameLogicService {
       // 색이 없으면 기본 색 생성
       if (!color) {
         const { generatorColor } = await import('../util/colorGenerator.util');
-        color = generatorColor();
+        color = generatorColor(1000);
         await this.gameStateService.setUserColor(canvasId, userId, color);
         console.log(`[GameLogicService] 기본 색 생성 및 저장: userId=${userId}, color=${color}`);
       }
@@ -359,64 +359,73 @@ export class GameLogicService {
   // 캔버스 종료(시간 만료) 시 강제 게임 종료 및 결과 브로드캐스트
   async forceGameEnd(canvasId: string, server?: any) {
     try {
-      console.log(`[GameLogicService] forceGameEnd 호출: canvasId=${canvasId}`);
-      // 랭킹 계산 시간 측정 시작
-      const rankingStart = Date.now();
-      // 모든 유저, 사망자 목록 조회
-      const allUserIds = await this.gameStateService.getAllUsersInGame(canvasId);
-      const deadUserIds = await this.gameStateService.getAllDeadUsers(canvasId);
-      const aliveUserIds = allUserIds.filter(uid => !deadUserIds.includes(uid));
-      // 유저별 own_count, try_count, dead 여부 조회
-      const userStats = await Promise.all(
-        allUserIds.map(async uid => {
-          const [own, tr, dead] = await Promise.all([
-            this.gameStateService.getUserOwnCount(canvasId, uid),
-            this.gameStateService.getUserTryCount(canvasId, uid),
-            this.gameStateService.getUserDead(canvasId, uid),
-          ]);
-          const username = await this.getUserNameById(uid); // 닉네임 조회
-          return {
-            username,
-            own_count: own,
-            try_count: tr,
-            dead,
-          };
-        })
-      );
-      // 랭킹 산정
-      const ranked = this.calculateRanking(userStats);
-      console.log(`[GameLogicService] forceGameEnd 랭킹 계산 완료:`, ranked.map(r => `${r.username}(rank=${r.rank}, own=${r.own_count}, try=${r.try_count}, dead=${r.dead})`));
-      // 랭킹 계산 시간 측정 끝
-      const rankingEnd = Date.now();
-      console.log(`[GameLogicService] forceGameEnd 랭킹 계산 및 결과 브로드캐스트 준비까지 소요: ${rankingEnd - rankingStart}ms`);
-      // 게임 결과를 DB에 저장 (rank만 업데이트)
-      await this.updateGameResults(canvasId, ranked);
-      // 워커 큐에 canvas-history 잡 추가
-      try {
-        const { historyQueue } = await import('../queues/bullmq.queue');
-        const canvasInfo = await this.canvasService.getCanvasById(canvasId);
-        const meta = canvasInfo?.metaData;
-        await historyQueue.add('canvas-history', {
-          canvas_id: canvasId,
-          size_x: meta?.sizeX,
-          size_y: meta?.sizeY,
-          type: meta?.type,
-          startedAt: meta?.startedAt,
-          endedAt: meta?.endedAt,
-          created_at: meta?.createdAt,
-          updated_at: new Date(),
-        });
-        console.log(`[GameLogicService] 워커 큐에 canvas-history 잡 추가 완료: canvasId=${canvasId}`);
-      } catch (e) {
-        console.error(`[GameLogicService] 워커 큐에 canvas-history 잡 추가 실패: canvasId=${canvasId}`, e);
-      }
-      // 결과 브로드캐스트
-      if (server) {
-        server.to(`canvas_${canvasId}`).emit('game_result', { results: ranked });
-        console.log(`[GameLogicService] forceGameEnd 결과 브로드캐스트 완료: canvasId=${canvasId}`);
-      }
-    } catch (err) {
-      console.error(`[GameLogicService] forceGameEnd 에러: canvasId=${canvasId}`, err);
+       // 게임 종료 직전 모든 유저 상태 DB 반영 (life 등)
+       if (this.gameFlushService && typeof this.gameFlushService.flushDirtyUsers === 'function') {
+         await this.gameFlushService.flushDirtyUsers(canvasId);
+       }
+       // 랭킹 계산 시간 측정 시작
+       const rankingStart = Date.now();
+       // 모든 유저, 사망자 목록 조회
+       const allUserIds = await this.gameStateService.getAllUsersInGame(canvasId);
+       const deadUserIds = await this.gameStateService.getAllDeadUsers(canvasId);
+       const aliveUserIds = allUserIds.filter(uid => !deadUserIds.includes(uid));
+       // 유저별 own_count, try_count, dead 여부 조회
+       const userStats = await Promise.all(
+         allUserIds.map(async uid => {
+           const [own, tr, dead] = await Promise.all([
+             this.gameStateService.getUserOwnCount(canvasId, uid),
+             this.gameStateService.getUserTryCount(canvasId, uid),
+             this.gameStateService.getUserDead(canvasId, uid),
+           ]);
+           const username = await this.getUserNameById(uid); // 닉네임 조회
+           return {
+             username,
+             own_count: own,
+             try_count: tr,
+             dead,
+             userId: uid,
+           };
+         })
+       );
+       // 랭킹 산정
+       const ranked = this.calculateRanking(userStats);
+       // 랭킹 계산 시간 측정 끝
+       const rankingEnd = Date.now();
+       // 게임 결과를 DB에 저장 (rank만 업데이트, userId 직접 사용)
+       await this.updateGameResultsByUserId(canvasId, ranked);
+       // canvas-history 잡 추가 완전 제거 (alarm.worker/배치에서만 관리)
+       // 결과 브로드캐스트
+       if (server) {
+         server.to(`canvas_${canvasId}`).emit('game_result', { results: ranked });
+         console.log(`[GameLogicService] forceGameEnd: 게임 결과 브로드캐스트 완료: canvasId=${canvasId}`);
+       }
+     } catch (err) {
+       console.error(`[GameLogicService] forceGameEnd 에러: canvasId=${canvasId}`, err);
+     }
+   }
+
+  // 게임 결과를 DB에 저장 (rank만 업데이트, userId 직접 사용)
+  private async updateGameResultsByUserId(canvasId: string, results: any[]) {
+    try {
+      console.log(`[GameLogicService] DB에 랭킹 업데이트 시작: canvasId=${canvasId}, 결과 수=${results.length}`);
+      // 배치 업데이트를 위한 쿼리 준비
+      const updatePromises = results.map(async (result) => {
+        const userId = result.userId;
+        if (!userId) {
+          console.warn(`[GameLogicService] userId 없음: result=`, result);
+          return;
+        }
+        // game_user_result 테이블에 rank 업데이트
+        await this.dataSource.query(
+          `UPDATE game_user_result SET rank = $1 WHERE user_id = $2 AND canvas_id = $3`,
+          [result.rank, userId, canvasId]
+        );
+        console.log(`[GameLogicService] 랭킹 업데이트 완료: userId=${userId}, rank=${result.rank}`);
+      });
+      await Promise.all(updatePromises);
+      console.log(`[GameLogicService] 모든 랭킹 업데이트 완료: canvasId=${canvasId}`);
+    } catch (error) {
+      console.error(`[GameLogicService] 랭킹 업데이트 실패:`, error);
     }
   }
 
@@ -425,17 +434,14 @@ export class GameLogicService {
     return userStats
       .map(u => ({ ...u }))
       .sort((a, b) => {
-        if (!a.dead && a.try_count > 0 && (b.dead || b.try_count === 0)) return -1;
-        if (!b.dead && b.try_count > 0 && (a.dead || a.try_count === 0)) return 1;
-        if (!a.dead && !b.dead && a.try_count > 0 && b.try_count > 0) {
-          if (b.own_count !== a.own_count) return b.own_count - a.own_count;
-          return a.try_count - b.try_count;
-        }
-        if ((a.dead || a.try_count === 0) && (b.dead || b.try_count === 0)) {
-          if (b.try_count !== a.try_count) return b.try_count - a.try_count;
-          return a.own_count - b.own_count;
-        }
-        return 0;
+        // 소유수 내림차순
+        if (b.own_count !== a.own_count) return b.own_count - a.own_count;
+        // 시도수 내림차순
+        if (b.try_count !== a.try_count) return b.try_count - a.try_count;
+        // userId 오름차순 (숫자 비교)
+        const aId = typeof a.userId === 'number' ? a.userId : parseInt(a.userId, 10);
+        const bId = typeof b.userId === 'number' ? b.userId : parseInt(b.userId, 10);
+        return aId - bId;
       })
       .map((u, i) => ({ ...u, rank: i + 1 }));
   }

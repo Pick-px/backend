@@ -1,44 +1,99 @@
 import * as crypto from 'crypto';
 
 /**
- * UUID → 0~999 인덱스로 변환
+ * 기존 색상 생성 로직 (주석처리)
  */
-function uuidToIndex(uuid: string, maxIndex: number = 1000): number {
-  const hash = crypto.createHash('md5').update(uuid).digest('hex');
-  const hashPrefix = hash.slice(0, 8);
-  const numeric = parseInt(hashPrefix, 16);
-  return numeric % maxIndex;
-}
+// function uuidToIndex(uuid: string, maxIndex: number = 1000): number {
+//   const hash = crypto.createHash('md5').update(uuid).digest('hex');
+//   const hashPrefix = hash.slice(0, 8);
+//   const numeric = parseInt(hashPrefix, 16);
+//   return numeric % maxIndex;
+// }
+// function hslToHex(h: number, s: number, l: number): string {
+//   s /= 100;
+//   l /= 100;
+//   const k = (n: number) => (n + h / 30) % 12;
+//   const a = s * Math.min(l, 1 - l);
+//   const f = (n: number) =>
+//     Math.round(
+//       255 * (l - a * Math.max(-1, Math.min(Math.min(k(n) - 3, 9 - k(n)), 1)))
+//     );
+//   return `#${[f(0), f(8), f(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+// }
+// function generateHexColor(index: number, maxIndex: number): string {
+//   const hue = Math.floor((360 * index) / maxIndex); // 0 ~ 359
+//   return hslToHex(hue, 70, 60); // 고정된 채도/명도에서 색상만 변화
+// }
+// export function generatorColor(maxIndex: number = 1000) {
+//   const uuid = crypto.randomUUID(); // UUID 생성
+//   const index = uuidToIndex(uuid, maxIndex);
+//   const color = generateHexColor(index, maxIndex);
+//   return color;
+// }
 
-/**
- * HSL → HEX 변환
- */
+
+//구분 잘 가는 HEX 팔레트 (검은색 제외, 30개)
+const HEX_PALETTE = [
+  '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
+  '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff',
+  '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1',
+  '#000075', '#808080', '#a9a9a9', '#ffd700', '#00ff00', '#00ced1',
+  '#ff1493', '#7cfc00', '#ff4500', '#4682b4', '#dda0dd', '#bdb76b',
+  '#ff6347', // ... 필요시 더 추가
+].filter(c => c.toLowerCase() !== '#000000'); // 검은색 배제
+
+// HSL의 Hue, Saturation, Lightness 조합
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100;
   l /= 100;
-
   const k = (n: number) => (n + h / 30) % 12;
   const a = s * Math.min(l, 1 - l);
   const f = (n: number) =>
     Math.round(
       255 * (l - a * Math.max(-1, Math.min(Math.min(k(n) - 3, 9 - k(n)), 1)))
     );
-
   return `#${[f(0), f(8), f(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/**
- * index → HEX 색상
- */
-function generateHexColor(index: number, maxIndex: number): string {
-  const hue = Math.floor((360 * index) / maxIndex); // 0 ~ 359
-  return hslToHex(hue, 70, 60); // 고정된 채도/명도에서 색상만 변화
+function getDistinctColorIndex(max: number): number {
+  // 골고루 섞인 인덱스(0, max/2, max/4, 3*max/4, ...)
+  // Van der Corput sequence 등도 가능하지만, 간단히 섞음
+  const idx = Math.floor(Math.random() * max);
+  return ((idx * 37) % max); // 37은 200 이하에서 최대한 골고루 분포
 }
 
-export function generatorColor(maxIndex: number = 1000) {
-  const uuid = crypto.randomUUID(); // UUID 생성
-  const index = uuidToIndex(uuid, maxIndex);
-  const color = generateHexColor(index, maxIndex);
-
+export function generatorColor(idx: number, maxPeople: number = 1000): string {
+  // 1. HEX 팔레트 우선 배정
+  if (idx < HEX_PALETTE.length) {
+    return HEX_PALETTE[idx];
+  }
+  // 2. 부족하면 HSL 조합으로 생성 (검은색만 배제)
+  const hues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+  const sats = [40, 60, 80, 100, 85];
+  const lights = [35, 50, 65, 80, 90];
+  const total = hues.length * sats.length * lights.length;
+  if (idx < HEX_PALETTE.length + total) {
+    const hIdx = Math.floor((idx - HEX_PALETTE.length) / (sats.length * lights.length)) % hues.length;
+    const sIdx = Math.floor((idx - HEX_PALETTE.length) / lights.length) % sats.length;
+    const lIdx = (idx - HEX_PALETTE.length) % lights.length;
+    const h = hues[hIdx];
+    const s = sats[sIdx];
+    const l = lights[lIdx];
+    const color = hslToHex(h, s, l);
+    if (color.toLowerCase() === '#000000') return '#0074d9';
+    return color;
+  }
+  // 3. 1000명까지: 기존 색상에서 약간씩 변형 (중복 최소화)
+  // 기존 HSL 조합을 재활용하되, idx에 따라 H/S/L을 소폭 변화
+  const baseIdx = (idx - HEX_PALETTE.length - total) % total;
+  const hIdx = Math.floor(baseIdx / (sats.length * lights.length)) % hues.length;
+  const sIdx = Math.floor(baseIdx / lights.length) % sats.length;
+  const lIdx = baseIdx % lights.length;
+  // idx에 따라 약간의 변화(최대 10도, 5%, 5%)
+  const h = (hues[hIdx] + ((idx % 10) * 3)) % 360;
+  const s = Math.min(100, sats[sIdx] + (idx % 5));
+  const l = Math.min(95, lights[lIdx] + (idx % 5));
+  const color = hslToHex(h, s, l);
+  if (color.toLowerCase() === '#000000') return '#ffffff';
   return color;
 }
