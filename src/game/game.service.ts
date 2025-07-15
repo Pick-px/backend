@@ -28,7 +28,7 @@ export class GameService {
 
   async getQuestions(): Promise<QuestionDto[]> {
     const questions: QuestionDto[] = await this.dataSource.query(
-      'select id, content, answer from questions order by RANDOM()'
+      'select id, question, options, answer from questions order by RANDOM()'
     );
     return questions;
   }
@@ -88,8 +88,7 @@ export class GameService {
           // 직접 쿼리로도 시도
           await manager.query(
             `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, rank, life, created_at)
-             VALUES ($1, $2, $3, $4, $5, NOW())
-             ON CONFLICT (user_id, canvas_id) DO NOTHING`,
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
             [user_id, canvasId, color, 0, 2]
           );
           console.log(
@@ -109,9 +108,9 @@ export class GameService {
           .into(QuestionUser)
           .values(
             questions.map((question) => ({
-              user: { id: user_id },
-              canvas: { id: Number(canvasId) },
-              question_id: { id: question.id },
+              userId: user_id,
+              canvasId: Number(canvasId),
+              questionId: question.id,
               isCorrect: true,
             }))
           )
