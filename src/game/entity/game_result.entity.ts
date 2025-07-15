@@ -13,17 +13,14 @@ export class GameUserResult {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'user_id', type: 'bigint' })
-  userId: number;
-
-  @Column({ name: 'canvas_id', type: 'bigint' })
-  canvasId: number;
-
   @Column({ name: 'rank', type: 'int' })
   rank: number;
 
   @Column({ name: 'assigned_color', type: 'varchar' })
   color: string;
+
+  @Column({ name: 'life', type: 'int', default: 2 })
+  life: number;
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

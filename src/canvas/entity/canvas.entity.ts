@@ -19,9 +19,9 @@ export class Canvas {
 
   @Column({
     type: 'text',
-    enum: ['public', 'event', 'game'],
+    enum: ['public', 'event_common', 'event_colorlimit', 'game_calculation'],
   })
-  type: 'public' | 'event' | 'game';
+  type: 'public' | 'event_common' | 'event_colorlimit' | 'game_calculation';
 
   @Column({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;

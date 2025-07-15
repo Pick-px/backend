@@ -8,9 +8,16 @@ import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
 import { PixelService } from '../../pixel/pixel.service';
 import { GroupService } from '../../group/group.service';
 import { CanvasService } from '../canvas.service';
+import {
+  isEndingWithOneDay,
+  putJobOnAlarmQueue3SecsBeforeStart,
+  putJobOnAlarmQueueBeforeStart30s,
+  putJobOnAlarmQueueThreeSecBeforeEnd,
+  putJobOnAlarmQueueGameEnd,
+} from '../../util/alarmGenerator.util';
 
 @Injectable()
-export class GameCanvasStrategy
+export class GameCalculationCanvasStrategy
   extends AbstractCanvasStrategy
   implements CanvasCreationStrategy
 {
@@ -28,7 +35,7 @@ export class GameCanvasStrategy
     const { title, size_x, size_y, startedAt, endedAt } = createCanvasDto;
     const canvas = this.canvasRepository.create({
       title,
-      type: 'game',
+      type: 'game_calculation',
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),
@@ -37,7 +44,11 @@ export class GameCanvasStrategy
     });
     const newCanvas = await this.canvasRepository.save(canvas);
     await this.runPostCreationSteps(newCanvas);
-    await this.isEndingWithOneDay(newCanvas);
+    await isEndingWithOneDay(newCanvas);
+    await putJobOnAlarmQueueBeforeStart30s(newCanvas);
+    await putJobOnAlarmQueue3SecsBeforeStart(newCanvas);
+    await putJobOnAlarmQueueThreeSecBeforeEnd(newCanvas);
+    await putJobOnAlarmQueueGameEnd(newCanvas);
     return newCanvas;
   }
 }

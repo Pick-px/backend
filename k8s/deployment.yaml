@@ -7,7 +7,7 @@ metadata:
     app: nestjs-app
     component: api
 spec:
-  replicas: 3
+  replicas: 6
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -144,6 +144,26 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: google-redirect-uri
+            - name: AWS_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: aws-s3-bucket
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: aws-secret-access-key
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: aws-region
           resources:
             requests:
               memory: '512Mi'

@@ -6,7 +6,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
-import { Question } from '../../entity/questions.entity';
+import { Question } from './questions.entity';
 
 @Entity('question_user')
 export class QuestionUser {
@@ -18,6 +18,9 @@ export class QuestionUser {
 
   @Column({ name: 'question_id', type: 'bigint' })
   questionId: number;
+
+  @Column({ name: 'canvas_id', type: 'bigint' })
+  canvasId: number;
 
   @Column({ name: 'submitted_answer', type: 'int' })
   answer: number;

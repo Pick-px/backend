@@ -9,8 +9,7 @@ import { Chat } from './group/entity/chat.entity';
 import { GroupUser } from './entity/GroupUser.entity';
 import * as dotenv from 'dotenv';
 import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
-import { ImageHistory } from './canvas/entity/imageHistory.entity';
-import { Question } from './entity/questions.entity';
+import { Question } from './game/entity/questions.entity';
 import { QuestionUser } from './game/entity/question_user.entity';
 import { GameUserResult } from './game/entity/game_result.entity';
 
@@ -45,7 +44,6 @@ export const AppDataSource = new DataSource({
     Chat,
     GroupUser,
     CanvasHistory,
-    ImageHistory,
     Question,
     QuestionUser,
     GameUserResult,

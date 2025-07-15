@@ -1,28 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import { CanvasCreationStrategy } from '../interface/canvasCreateStrategy.interface';
 import { PublicCanvasStrategy } from './publicCanvasStrategy.strategy';
-import { EventCanvasStrategy } from './eventCanvasStrategy.strategy';
-import { GameCanvasStrategy } from './gameCanvasStrategy.strategy';
+import { EventCommonCanvasStrategy } from './eventCommonCanvasStrategy.strategy';
+import { EventColorLimitCanvasStrategy } from './eventColorLimitCanvasStrategy.strategy';
+import { GameCalculationCanvasStrategy } from './gameCalculationCanvasStrategy.strategy';
 
 @Injectable()
 export class CanvasStrategyFactory {
   constructor(
     private readonly publicStrategy: PublicCanvasStrategy,
-    private readonly eventStrategy: EventCanvasStrategy,
-    // gameStrategy 등 추가 가능
-    private readonly gameStrategy: GameCanvasStrategy
+    private readonly eventCommonStrategy: EventCommonCanvasStrategy,
+    private readonly eventColorLimitStrategy: EventColorLimitCanvasStrategy,
+    private readonly gameCalculationStrategy: GameCalculationCanvasStrategy
   ) {}
 
   getStrategy(type: string): CanvasCreationStrategy {
     switch (type) {
-      case 'game':
-        return this.gameStrategy;
-      case 'event':
-        return this.eventStrategy;
+      case 'game_calculation':
+        return this.gameCalculationStrategy;
+      case 'event_common':
+        return this.eventCommonStrategy;
+      case 'event_colorlimit':
+        return this.eventColorLimitStrategy;
       case 'public':
         return this.publicStrategy;
       default:
-        return this.eventStrategy;
+        return this.eventCommonStrategy;
     }
   }
 }

@@ -152,6 +152,8 @@ export class GroupController {
         user.id,
         Number(canvasId)
       );
+
+      console.log('all groups : ', groups);
       return {
         success: true,
         status: '200',
@@ -354,6 +356,7 @@ export class GroupController {
       response.isSuccess = true;
       response.message = '그룹 참여에 성공하였습니다.';
       response.data = await this.groupService.getGroupList(canvas_id, _id);
+      console.log('response: ', response.data);
       return response;
     } catch (err) {
       if (err instanceof HttpException) {
@@ -512,5 +515,12 @@ export class GroupController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('test')
+  async testAPI(@Query('group_id') group_id: string) {
+    const result = await this.groupService.getOverlayData(group_id);
+    console.log('result: ', result);
+    console.log('result[0]: ', result[0]);
   }
 }

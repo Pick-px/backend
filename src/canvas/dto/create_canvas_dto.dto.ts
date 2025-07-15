@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { IsString, IsNotEmpty, IsNumber, IsIn, IsDate } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  Matches,
+  IsDate,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { Type } from 'class-transformer';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -21,7 +28,10 @@ export class createCanvasDto {
     description:
       '캔버스 타입입니다. enum 값이 아닌 string으로 받습니다. 현재는 public / event로만 저장 가능',
   })
-  @IsIn(['public', 'event'], { message: '타입은 비워둘 수 없습니다.' })
+  @IsString()
+  @Matches(/^public$|^event_.*$|^game_.*$/, {
+    message: 'type must be public, event_*, or game_*',
+  })
   type: 'public' | 'event';
 
   @ApiProperty({
@@ -44,6 +54,7 @@ export class createCanvasDto {
     example: dayjs().tz('Asia/Seoul').format(),
     description: '캔버스 시작일 (ISO8601 형식)',
   })
+  @Type(() => Date)
   @IsNotEmpty()
   @IsDate()
   startedAt: Date;
@@ -53,6 +64,7 @@ export class createCanvasDto {
     description: '캔버스 종료일 (ISO8601 형식, 상시 캔버스는 null 가능)',
     required: false,
   })
+  @Type(() => Date)
   @IsDate()
   endedAt: Date;
 }

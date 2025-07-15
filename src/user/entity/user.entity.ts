@@ -4,7 +4,7 @@ import { Pixel } from '../../pixel/entity/pixel.entity';
 import { GroupUser } from '../../entity/GroupUser.entity';
 import { CanvasHistory } from '../../canvas/entity/canvasHistory.entity';
 import { QuestionUser } from '../../game/entity/question_user.entity';
-import { GameUserResult } from 'src/game/entity/game_result.entity';
+import { GameUserResult } from '../../game/entity/game_result.entity';
 
 @Entity('users')
 export class User {
@@ -32,10 +32,10 @@ export class User {
   @OneToMany(() => GroupUser, (gu) => gu.user)
   groupUsers: GroupUser[];
 
-  @OneToMany(() => CanvasHistory, (history) => history.top_participant)
+  @OneToMany(() => CanvasHistory, (history) => history.topTryUser)
   top_participant_history: CanvasHistory[];
 
-  @OneToMany(() => CanvasHistory, (history) => history.top_pixel_owner)
+  @OneToMany(() => CanvasHistory, (history) => history.topOwnUser)
   top_pixel_owner_history: CanvasHistory[];
 
   @OneToMany(() => QuestionUser, (qu) => qu.user)

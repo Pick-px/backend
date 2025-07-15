@@ -6,70 +6,10 @@ import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
-import { Canvas } from '../canvas/entity/canvas.entity';
-import { generatorPixelToImg } from '../util/imageGenerator.util';
-import { randomUUID } from 'crypto';
-import { uploadBufferToS3 } from '../util/s3UploadFile.util';
-import { ImageHistory } from '../canvas/entity/imageHistory.entity';
-import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
+import '../../src/worker/history.worker';
 
 config();
 
-const canvasRepository = AppDataSource.getRepository(Canvas);
-const pixelRepository = AppDataSource.getRepository(Pixel);
-const historyRepository = AppDataSource.getRepository(CanvasHistory);
-const imgRepository = AppDataSource.getRepository(ImageHistory);
-
-const historyWorker = new Worker(
-  'canvas-history',
-  async (job) => {
-    console.time('history start');
-    const { canvas_id } = job.data;
-    console.log(canvas_id);
-    const canvas = await canvasRepository.findOne({
-      where: { id: Number(canvas_id) },
-    });
-    if (!canvas) throw new Error('Canvas not found');
-    const pixelData: { x: number; y: number; color: string }[] =
-      await pixelRepository.query(
-        'select x, y, color from pixels where canvas_id = $1::INTEGER',
-        [Number(canvas_id)]
-      );
-
-    const buffer = await generatorPixelToImg(
-      pixelData,
-      canvas.sizeX,
-      canvas.sizeY
-    );
-    const contentType = 'image/png';
-    const key = `history/${canvas_id}/${randomUUID()}.png`;
-    await uploadBufferToS3(buffer, key, contentType);
-    console.timeEnd('history start');
-
-    const history = await historyRepository.findOne({
-      where: { canvas_id: Number(canvas_id) },
-    });
-
-    if (!history) throw new Error('CanvasHistory not found');
-
-    await imgRepository.save({
-      canvasHistory: history,
-      image_url: key,
-      captured_at: new Date(),
-    });
-  },
-  {
-    concurrency: 4,
-    connection: {
-      ...redisConnection,
-      commandTimeout: 30000,
-      connectTimeout: 30000,
-    },
-    removeOnComplete: { count: 100 },
-    removeOnFail: { count: 50 },
-  }
-);
-console.log('[Worker] Canvas history worker 초기화 완료, 대기 중...');
 type PixelGenerationJobData = {
   canvas_id: number;
   size_x: number;
@@ -523,15 +463,7 @@ void (async () => {
     worker.on('error', (err) => {
       console.error('[Worker] 워커 에러:', err);
     });
-    historyWorker.on('completed', (job) => {
-      console.log(`[HistoryWorker] Job 완료: ${job.id}`);
-    });
-    historyWorker.on('failed', (job, err) => {
-      console.error(`[HistoryWorker] Job 실패: ${job?.id}`, err);
-    });
-    historyWorker.on('error', (err) => {
-      console.error('[HistoryWorker] 워커 에러:', err);
-    });
+
     console.log('[Worker] 워커 시작 완료, job 대기 중...');
   } catch (error) {
     console.error('[Worker] 초기화 실패:', error);
@@ -565,4 +497,4 @@ export async function publishChatMessage(groupId: number, chatData: any) {
   }
 }
 
-export { worker, historyWorker };
+export { worker };

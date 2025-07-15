@@ -1,46 +1,45 @@
-import {
-  Entity,
-  PrimaryColumn,
-  Column,
-  OneToOne,
-  JoinColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Canvas } from './canvas.entity';
-import { User } from 'src/user/entity/user.entity';
+import { User } from '../../user/entity/user.entity';
 
 @Entity('canvas_history')
 export class CanvasHistory {
   @PrimaryColumn({ name: 'canvas_id' })
-  canvas_id: number;
+  canvasId: number;
 
-  @Column({ type: 'int' })
-  participant_count: number;
+  @Column({ name: 'participant_count', type: 'integer', default: 0 })
+  participantCount: number;
 
-  @Column({ type: 'int' })
-  attempt_count: number;
+  @Column({ name: 'total_try_count', type: 'integer', default: 0 })
+  totalTryCount: number;
 
-  @Column({ type: 'bigint' })
-  top_participant_id: number;
+  @Column({ name: 'top_try_user_id', type: 'bigint', nullable: true })
+  topTryUserId: number | null;
 
-  @Column({ type: 'bigint' })
-  top_pixel_owner_id: number;
+  @Column({ name: 'top_try_user_count', type: 'integer', nullable: true })
+  topTryUserCount: number | null;
 
-  @Column({ type: 'int' })
-  top_participant_attempts: number;
+  @Column({ name: 'top_own_user_id', type: 'bigint', nullable: true })
+  topOwnUserId: number | null;
 
-  @Column({ type: 'int' })
-  top_pixel_count: number;
+  @Column({ name: 'top_own_user_count', type: 'integer', nullable: true })
+  topOwnUserCount: number | null;
 
-  @OneToOne(() => Canvas)
+  @Column({ name: 'image_url', type: 'varchar', length: 1024 })
+  img_url: string;
+
+  @Column({ name: 'captured_at', type: 'timestamp' })
+  caputred_at: Date;
+
+  @ManyToOne(() => Canvas, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;
 
-  @ManyToOne(() => User, (user) => user.top_participant_history)
-  @JoinColumn({ name: 'top_participant_id' })
-  top_participant: User;
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'top_try_user_id' })
+  topTryUser: User | null;
 
-  @ManyToOne(() => User, (user) => user.top_pixel_owner_history)
-  @JoinColumn({ name: 'top_pixel_owner_id' })
-  top_pixel_owner: User;
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'top_own_user_id' })
+  topOwnUser: User | null;
 }

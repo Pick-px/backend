@@ -18,13 +18,13 @@ import { GroupUser } from './entity/GroupUser.entity';
 import { HttpModule } from '@nestjs/axios';
 import { AppGateway } from './app.gateway';
 import { AwsModule } from './aws/aws.module';
-import { ScheduleModule } from '@nestjs/schedule';
 import { PixelModule } from './pixel/pixel.module';
 import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
-import { ImageHistory } from './canvas/entity/imageHistory.entity';
-import { Question } from './entity/questions.entity';
+import { Question } from './game/entity/questions.entity';
 import { QuestionUser } from './game/entity/question_user.entity';
 import { GameUserResult } from './game/entity/game_result.entity';
+import { GameController } from './game/game.controller';
+import { GameModule } from './game/game.module';
 
 @Module({
   imports: [
@@ -57,7 +57,6 @@ import { GameUserResult } from './game/entity/game_result.entity';
               Group,
               GroupUser,
               CanvasHistory,
-              ImageHistory,
               Question,
               QuestionUser,
               GameUserResult,
@@ -89,7 +88,6 @@ import { GameUserResult } from './game/entity/game_result.entity';
               Group,
               GroupUser,
               CanvasHistory,
-              ImageHistory,
               GameUserResult,
               Question,
               QuestionUser,
@@ -100,7 +98,6 @@ import { GameUserResult } from './game/entity/game_result.entity';
       },
       inject: [ConfigService],
     }),
-    ScheduleModule.forRoot(),
     RedisModule,
     CanvasModule,
     DatabaseModule,
@@ -110,8 +107,9 @@ import { GameUserResult } from './game/entity/game_result.entity';
     HttpModule,
     AwsModule,
     PixelModule,
+    GameModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, GameController],
   providers: [
     AppService,
     // Gateway 초기화 순서 보장

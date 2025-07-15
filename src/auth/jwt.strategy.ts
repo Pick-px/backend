@@ -30,7 +30,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       if (!user) {
         throw new UnauthorizedException('Invalid token');
       }
-      console.log('in validate: ', user);
       return { _id: user.id };
     } catch (err) {
       console.log(err);

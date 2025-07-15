@@ -63,7 +63,8 @@ create table if not exists user_canvas
     id bigserial,
     user_id   bigint                              not null,
     canvas_id integer                             not null,
-    count integer default 0 not null,
+    try_count integer default 0 not null,
+    own_count integer default null,
     joined_at timestamp default CURRENT_TIMESTAMP not null,
     primary key (id),
     unique(user_id, canvas_id),
@@ -82,7 +83,7 @@ create table if not exists groups
     name      varchar(20) not null,
     created_at timestamp    not null,
     updated_at timestamp    not null,
-    max_participants int not null check (max_participants >= 1 and max_participants <= 200),
+    max_participants int not null check (max_participants >= 1 and max_participants <= 1000),
     current_participants_count int not null default 1,
     canvas_id bigint not null,
     made_by bigint not null,
@@ -138,47 +139,42 @@ create table if not exists chats
 alter table chats
     owner to pixel_user;
 
+-- 캔버스 히스토리
+CREATE TABLE IF NOT EXISTS canvas_history (
+    canvas_id INTEGER PRIMARY KEY,
+    participant_count INTEGER NOT NULL DEFAULT 0,
+    total_try_count INTEGER NOT NULL DEFAULT 0,
+    top_try_user_id BIGINT,
+    top_try_user_count INTEGER,
+    top_own_user_id BIGINT,
+    top_own_user_count INTEGER,
+    image_url VARCHAR(1024),
+    captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id),
+    FOREIGN KEY (top_try_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (top_own_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- 관리자 계정 seed (email=pickpx0617@gmail.com, user_name=gmg team)
 INSERT INTO users (email, password, created_at, updated_at, user_name)
 VALUES ('pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
 ON CONFLICT (email) DO NOTHING; 
 
-CREATE TABLE IF NOT EXISTS canvas_history (
-    canvas_id INTEGER PRIMARY KEY,
-    participant_count INTEGER NOT NULL DEFAULT 1,
-    attempt_count INTEGER NOT NULL DEFAULT 1,
-    top_participant_id BIGINT,
-    top_participant_attempts INTEGER,
-    top_pixel_owner_id BIGINT,
-    top_pixel_count INTEGER,
-    FOREIGN KEY (canvas_id) REFERENCES canvases(id),
-    FOREIGN KEY (top_participant_id) REFERENCES users(id) ON DELETE SET NULL,
-    FOREIGN KEY (top_pixel_owner_id) REFERENCES users(id) ON DELETE SET NULL
-);
-
--- 캔버스 이미지 상태 스냅샷 저장 테이블
-CREATE TABLE IF NOT EXISTS image_history (
-    id bigserial PRIMARY KEY,
-    canvas_history_id INTEGER NOT NULL,
-    image_url VARCHAR(1024) NOT NULL,
-    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (canvas_history_id) REFERENCES canvas_history(canvas_id) ON DELETE CASCADE
-);
-
 -- 문제 은행
 CREATE TABLE IF NOT EXISTS questions (
-    id bigserial PRIMARY KEY,
-    content TEXT NOT NULL,
-    answer INTEGER NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id bigint PRIMARY KEY,
+    question TEXT NOT NULL,
+    options TEXT[] NOT NULL,
+    answer INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS question_user (
     id bigserial PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    canvas_id BIGINT NOT NULL,
     question_id BIGINT NOT NULL,
     submitted_answer INTEGER,
-    is_correct BOOLEAN NOT NULL,
+    is_correct BOOLEAN NOT NULL default true,
     submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
@@ -191,8 +187,12 @@ CREATE TABLE IF NOT EXISTS game_user_result (
     canvas_id INTEGER NOT NULL,
     rank INTEGER,
     assigned_color VARCHAR(7),
+    life INTEGER DEFAULT 2,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE,
-    UNIQUE (user_id, canvas_id)
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
 );
+
+-- game_user_result 중복 방지 인덱스
+CREATE UNIQUE INDEX IF NOT EXISTS idx_game_user_result_user_canvas
+  ON game_user_result (user_id, canvas_id);

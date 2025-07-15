@@ -8,9 +8,10 @@ import { createCanvasDto } from '../dto/create_canvas_dto.dto';
 import { PixelService } from '../../pixel/pixel.service';
 import { CanvasService } from '../canvas.service';
 import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
+import { isEndingWithOneDay } from '../../util/alarmGenerator.util';
 
 @Injectable()
-export class EventCanvasStrategy
+export class EventColorLimitCanvasStrategy
   extends AbstractCanvasStrategy
   implements CanvasCreationStrategy
 {
@@ -30,7 +31,7 @@ export class EventCanvasStrategy
 
     const canvas = this.canvasRepository.create({
       title,
-      type: 'event',
+      type: 'event_colorlimit',
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),
@@ -39,7 +40,7 @@ export class EventCanvasStrategy
     });
     const newCanvas = await this.canvasRepository.save(canvas);
     await this.runPostCreationSteps(newCanvas);
-    await this.isEndingWithOneDay(newCanvas);
+    await isEndingWithOneDay(newCanvas);
     return newCanvas;
   }
 }

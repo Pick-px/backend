@@ -4,7 +4,6 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import Redis from 'ioredis';
-import { Group } from '../group/entity/group.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
@@ -42,6 +41,9 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(
+      `[tryDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`
+    );
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
@@ -235,7 +237,7 @@ export class CanvasService {
 
   async generateCanvasHistory(canvas: Canvas): Promise<void> {
     await this.historyRepository.save({
-      canvas_id: canvas.id,
+      canvasId: canvas.id,
     });
   }
   async findCanvasesEndingWithinDays(day: number) {
@@ -250,7 +252,7 @@ export class CanvasService {
   }
 
   // 캔버스 활성 상태 체크 (Redis 캐시 우선, DB 폴백)
-  private async isCanvasActive(canvasId: number): Promise<boolean> {
+  async isCanvasActive(canvasId: number): Promise<boolean> {
     try {
       // 1. Redis 캐시에서 조회
       const cacheKey = `canvas:active:${canvasId}`;
@@ -319,6 +321,9 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(
+      `[applyDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`
+    );
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
@@ -334,12 +339,15 @@ export class CanvasService {
     );
 
     if (!is_locked) {
+      console.warn(
+        `[applyDrawPixel] 동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`
+      );
       // 이미 다른 사용자가 락을 선점한 경우
-      console.warn(`동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       return false;
     }
 
     try {
+      console.log(`[applyDrawPixel] 락 획득, tryDrawPixel 호출`);
       // 실제 픽셀 저장
       return await this.tryDrawPixel({ canvas_id, x, y, color, userId });
     } finally {
@@ -387,6 +395,15 @@ export class CanvasService {
     };
   }
 
+  // 캔버스 타입 조회 메서드 추가
+  async getCanvasType(canvas_id: string): Promise<string | null> {
+    if (!canvas_id) return null;
+    const idNum = Number(canvas_id);
+    if (isNaN(idNum)) return null;
+    const meta = await this.canvasRepository.findOneBy({ id: idNum });
+    return meta?.type ?? null;
+  }
+
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({
     canvas_id,
@@ -401,6 +418,43 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<DrawPixelResponse> {
+    // 캔버스 타입 조회
+    const canvasType = await this.getCanvasType(canvas_id);
+    // 게임 모드면 쿨다운 1초, 그 외는 10초
+    const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 10;
+    console.log(
+      `[CanvasService] 쿨다운 설정: canvasType=${canvasType}, cooldownSeconds=${cooldownSeconds}`
+    );
+
+    // 게임 캔버스인 경우 게임 시간 체크
+    if (canvasType === 'game_calculation') {
+      const canvasInfo = await this.getCanvasById(canvas_id);
+      const now = new Date();
+
+      if (
+        canvasInfo?.metaData?.startedAt &&
+        now < canvasInfo.metaData.startedAt
+      ) {
+        console.log(
+          `[CanvasService] 게임 시작 전 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`
+        );
+        return {
+          success: false,
+          message: '게임이 아직 시작되지 않았습니다.',
+        };
+      }
+
+      if (canvasInfo?.metaData?.endedAt && now > canvasInfo.metaData.endedAt) {
+        console.log(
+          `[CanvasService] 게임 종료 후 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`
+        );
+        return {
+          success: false,
+          message: '게임이 이미 종료되었습니다.',
+        };
+      }
+    }
+
     // 캔버스 활성 상태 먼저 체크
     const isActive = await this.isCanvasActive(parseInt(canvas_id));
     console.log(
@@ -416,12 +470,17 @@ export class CanvasService {
       };
     }
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 10;
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);
+    console.log(
+      `[CanvasService] 쿨다운 확인: userId=${userId}, canvasId=${canvas_id}, ttl=${ttl}`
+    );
 
     if (ttl > 0) {
+      console.log(
+        `[CanvasService] 쿨다운 중: userId=${userId}, remaining=${ttl}`
+      );
       return { success: false, message: '쿨다운 중', remaining: ttl };
     }
 
@@ -434,20 +493,26 @@ export class CanvasService {
       userId,
     });
 
+    if (result) {
+      // 쿨다운 설정
+      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
+      console.log(
+        `[CanvasService] 쿨다운 설정 완료: userId=${userId}, canvasId=${canvas_id}, seconds=${cooldownSeconds}`
+      );
+    }
+
     // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
       await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+      console.log(
+        `[CanvasService] 유저 캔버스 카운트 증가 완료: userId=${userId}, canvasId=${canvas_id}`
+      );
     } catch (error) {
       console.error('사용자 캔버스 카운트 증가 실패:', error);
       // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
     }
 
-    if (result) {
-      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
-      return { success: true, cooldown: cooldownSeconds };
-    } else {
-      return { success: false, message: '픽셀 저장 실패' };
-    }
+    return { success: result, message: result ? '성공' : '실패' };
   }
 
   // 쿨다운 적용 픽셀 그리기 for simulation
@@ -499,7 +564,7 @@ export class CanvasService {
     }
   }
 
-  // user_canvas 테이블의 count를 1씩 증가시키는 메서드
+  // user_canvas 테이블의 try_count를 1씩 증가시키는 메서드
   private async incrementUserCanvasCount(
     userId: number,
     canvasId: number
@@ -514,25 +579,25 @@ export class CanvasService {
       });
 
       if (userCanvas) {
-        // 기존 레코드가 있으면 count를 1 증가
-        userCanvas.count += 1;
+        // 기존 레코드가 있으면 try_count를 1 증가
+        userCanvas.tryCount += 1;
         await this.userCanvasRepository.save(userCanvas);
       } else {
-        // 레코드가 없으면 새로 생성 (count = 1)
+        // 레코드가 없으면 새로 생성 (try_count = 1)
         userCanvas = this.userCanvasRepository.create({
           user: { id: userId },
           canvas: { id: canvasId },
-          count: 1,
+          tryCount: 1,
           joinedAt: new Date(),
         });
         await this.userCanvasRepository.save(userCanvas);
       }
 
       console.log(
-        `사용자 ${userId}의 캔버스 ${canvasId} 카운트 증가: ${userCanvas.count}`
+        `사용자 ${userId}의 캔버스 ${canvasId} try_count 증가: ${userCanvas.tryCount}`
       );
     } catch (error) {
-      console.error('user_canvas 카운트 증가 중 오류:', error);
+      console.error('user_canvas try_count 증가 중 오류:', error);
       throw error;
     }
   }
@@ -547,5 +612,21 @@ export class CanvasService {
     const ttl = await this.redisClient.ttl(cooldownKey);
     console.log(`사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`);
     return ttl > 0 ? ttl : 0; // 초
+  }
+
+  async isActiveGameCanvas(canvasId: number): Promise<boolean> {
+    const canvas = await this.canvasRepository.findOne({
+      where: { id: canvasId },
+    });
+
+    if (!canvas) throw new NotFoundException('캔버스 정보가 없습니다.');
+
+    const now = Date.now(); // 현재 시각 (timestamp)
+    const startedAt = canvas.startedAt.getTime(); // Date → timestamp
+
+    // 시작 전에만 입장 가능
+    const isActive = now <= startedAt;
+
+    return isActive;
   }
 }
