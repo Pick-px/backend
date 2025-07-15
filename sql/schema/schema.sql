@@ -200,6 +200,7 @@ CREATE TABLE IF NOT EXISTS questions (
 CREATE TABLE IF NOT EXISTS question_user (
     id bigserial PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    canvas_id BIGINT NOT NULL,
     question_id BIGINT NOT NULL,
     submitted_answer INTEGER,
     is_correct BOOLEAN NOT NULL default true,

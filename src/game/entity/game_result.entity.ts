@@ -13,12 +13,6 @@ export class GameUserResult {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'user_id', type: 'bigint' })
-  userId: number;
-
-  @Column({ name: 'canvas_id', type: 'bigint' })
-  canvasId: number;
-
   @Column({ name: 'rank', type: 'int' })
   rank: number;
 

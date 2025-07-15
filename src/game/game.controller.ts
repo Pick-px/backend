@@ -4,12 +4,14 @@ import {
   InternalServerErrorException,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { WaitingResponseDto } from './dto/waitingResponse.dto';
+import { WaitingResponseDto, QuestionDto } from './dto/waitingResponse.dto';
 import { GameService } from './game.service';
 import { generatorColor } from '../util/colorGenerator.util';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import { AuthRequest } from '../interface/AuthRequest.interface';
 
 @ApiTags('canvas')
 @Controller('api/game')
@@ -18,10 +20,16 @@ export class GameController {
 
   @Get('waitingroom')
   @UseGuards(JwtAuthGuard)
-  async waitingGame(@Query('canvasId') canvasId: string) {
+  async waitingGame(
+    @Req() req: AuthRequest,
+    @Query('canvasId') canvasId: string
+  ) {
     try {
+      const user_id = req.user?._id;
       const color = generatorColor();
-      const data = await this.gameService.getData(canvasId, color);
+      const questions: QuestionDto[] = await this.gameService.getQuestions();
+      const data = await this.gameService.getData(canvasId, color, questions);
+      await this.gameService.setGameReady(color, user_id, canvasId, questions);
       try {
         const resposne = new WaitingResponseDto();
         resposne.data = data;
@@ -35,9 +43,7 @@ export class GameController {
       }
     } catch (Err) {
       console.log(Err);
-      throw new InternalServerErrorException(
-        '문제 조회 및 색상 배정 중 서버 오류 발생'
-      );
+      throw Err;
     }
   }
 }

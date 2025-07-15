@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Question } from '../entity/questions.entity';
 import { GameUserResult } from '../game/entity/game_result.entity';
 import { QuestionUser } from './entity/question_user.entity';
@@ -27,10 +31,13 @@ export class GameService {
     return questions;
   }
 
-  async getData(canvasId: string, color: string): Promise<GameResponseData> {
+  async getData(
+    canvasId: string,
+    color: string,
+    questions: QuestionDto[]
+  ): Promise<GameResponseData> {
     const result = await this.canvasService.isCanvasActive(Number(canvasId));
     if (!result) throw new NotFoundException('캔버스 활성상태가 아닙니다.');
-    const questions = await this.getQuestions();
     const canvas = await this.canvasService.getCanvasById(canvasId);
     if (!canvas || !canvas.metaData)
       throw new NotFoundException('캔버스가 존재하지 않습니다.');
@@ -45,5 +52,43 @@ export class GameService {
     res.canvasSize.width = canvas.metaData?.sizeX;
     res.canvasSize.height = canvas.metaData?.sizeY;
     return res;
+  }
+
+  async setGameReady(
+    color: string,
+    user_id: number,
+    canvasId: string,
+    questions: QuestionDto[]
+  ): Promise<void> {
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        await manager.save(GameUserResult, {
+          user: { id: user_id },
+          canvas: { id: Number(canvasId) },
+          rank: 0,
+          color: color,
+          createdAt: new Date(),
+        });
+
+        await manager
+          .createQueryBuilder()
+          .insert()
+          .into(QuestionUser)
+          .values(
+            questions.map((question) => ({
+              user: { id: user_id },
+              canvas: { id: Number(canvasId) },
+              question_id: { id: question.id },
+              isCorrect: true,
+            }))
+          )
+          .execute();
+      });
+    } catch (err) {
+      console.log(err);
+      throw new InternalServerErrorException(
+        '게임 준비 중 오류가 발생했습니다.'
+      );
+    }
   }
 }
