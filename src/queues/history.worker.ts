@@ -4,7 +4,7 @@ import { AppDataSource } from '../data-source';
 import { generatorPixelToImg } from '../util/imageGenerator.util';
 import { uploadBufferToS3 } from '../util/s3UploadFile.util';
 import { randomUUID } from 'crypto';
-import { redisConnection } from '../queues/bullmq.config';
+import { redisConnection } from './bullmq.config';
 import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
 
 const pixelRepository = AppDataSource.getRepository(Pixel);
