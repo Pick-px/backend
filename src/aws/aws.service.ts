@@ -4,6 +4,7 @@ import {
   PutObjectCommandInput,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as dotenv from 'dotenv';
@@ -63,5 +64,17 @@ export class AwsService {
         Key: url,
       })
     );
+  }
+
+  async getPreSignedUrl(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET!,
+      Key: key,
+    });
+
+    const url = await getSignedUrl(this.s3, command, {
+      expiresIn: 3000,
+    });
+    return url;
   }
 }

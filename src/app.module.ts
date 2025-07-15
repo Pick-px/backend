@@ -21,7 +21,6 @@ import { AwsModule } from './aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PixelModule } from './pixel/pixel.module';
 import { CanvasHistory } from './canvas/entity/canvasHistory.entity';
-import { ImageHistory } from './canvas/entity/imageHistory.entity';
 import { Question } from './entity/questions.entity';
 import { QuestionUser } from './game/entity/question_user.entity';
 import { GameUserResult } from './game/entity/game_result.entity';
@@ -59,7 +58,6 @@ import { GameModule } from './game/game.module';
               Group,
               GroupUser,
               CanvasHistory,
-              ImageHistory,
               Question,
               QuestionUser,
               GameUserResult,
@@ -91,7 +89,6 @@ import { GameModule } from './game/game.module';
               Group,
               GroupUser,
               CanvasHistory,
-              ImageHistory,
               GameUserResult,
               Question,
               QuestionUser,

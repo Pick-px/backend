@@ -6,7 +6,6 @@ import { CanvasService } from './canvas.service';
 import { CanvasController } from './canvas.controller';
 import { CanvasGateway } from './canvas.gateway';
 import { Group } from '../group/entity/group.entity'; // 추가
-import { ImageHistory } from './entity/imageHistory.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
@@ -34,7 +33,6 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
       Pixel,
       Group,
       UserCanvas,
-      ImageHistory,
       CanvasHistory,
     ]),
     JwtModule.register({}),

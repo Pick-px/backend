@@ -11,9 +11,13 @@ RUN apk add --no-cache tzdata \
 ENV TZ=Asia/Seoul
 
 # Install dependencies for development and canvas build
+# 기존 줄에서 py3-distutils 제거
 RUN apk add --no-cache \
   git \
   python3 \
+  py3-pip \
+  py3-setuptools \
+  py3-wheel \
   make \
   g++ \
   cairo-dev \
@@ -22,7 +26,6 @@ RUN apk add --no-cache \
   giflib-dev \
   pixman-dev \
   vips-dev
-
 # Copy package files
 COPY package*.json ./
 
@@ -48,9 +51,13 @@ RUN apk add --no-cache tzdata \
 ENV TZ=Asia/Seoul
 
 # Install dependencies for development and canvas build
+# 기존 줄에서 py3-distutils 제거
 RUN apk add --no-cache \
   git \
   python3 \
+  py3-pip \
+  py3-setuptools \
+  py3-wheel \
   make \
   g++ \
   cairo-dev \
@@ -59,7 +66,6 @@ RUN apk add --no-cache \
   giflib-dev \
   pixman-dev \
   vips-dev
-
 
 # Install dumb-init and curl for proper signal handling and health checks
 RUN apk add --no-cache dumb-init curl

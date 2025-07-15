@@ -6,7 +6,7 @@ import {
 import { Question } from '../entity/questions.entity';
 import { GameUserResult } from '../game/entity/game_result.entity';
 import { QuestionUser } from './entity/question_user.entity';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { QuestionDto, GameResponseData, Size } from './dto/waitingResponse.dto';
 import { CanvasService } from '../canvas/canvas.service';
@@ -21,6 +21,7 @@ export class GameService {
     @InjectRepository(QuestionUser)
     private readonly questionUserRepository: Repository<QuestionUser>,
     private readonly canvasService: CanvasService,
+    @InjectDataSource()
     private readonly dataSource: DataSource
   ) {}
 

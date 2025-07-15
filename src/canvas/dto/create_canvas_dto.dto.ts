@@ -10,6 +10,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { Type } from 'class-transformer';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -53,6 +54,7 @@ export class createCanvasDto {
     example: dayjs().tz('Asia/Seoul').format(),
     description: '캔버스 시작일 (ISO8601 형식)',
   })
+  @Type(() => Date)
   @IsNotEmpty()
   @IsDate()
   startedAt: Date;
@@ -62,6 +64,7 @@ export class createCanvasDto {
     description: '캔버스 종료일 (ISO8601 형식, 상시 캔버스는 null 가능)',
     required: false,
   })
+  @Type(() => Date)
   @IsDate()
   endedAt: Date;
 }

@@ -5,7 +5,7 @@ import {
   NotFoundException,
   Inject,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository, DataSource } from 'typeorm';
 import { Group } from './entity/group.entity';
 import { Canvas } from '../canvas/entity/canvas.entity';
@@ -17,10 +17,7 @@ import { CreatePreSignedUrl } from './dto/create_url.dto';
 import { AwsService } from '../aws/aws.service';
 import { randomUUID } from 'crypto';
 import { Overlay } from '../group/dto/overlay.dto';
-import {
-  constructS3PublicUrl,
-  extractKeyFromPresignedUrl,
-} from '../util/urlParsing.util';
+import { extractKeyFromPresignedUrl } from '../util/urlParsing.util';
 
 interface OverlayData {
   url: string;
@@ -37,6 +34,7 @@ export class GroupService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly awsService: AwsService,
     // === 통합 Redis 클라이언트 ===
@@ -140,11 +138,10 @@ export class GroupService {
 
   async createGroup(
     groupName: string,
-    maxParticipants: string,
+    maxParticipants: number,
     canvasId: string,
     _id: number
   ) {
-    const max = Number(maxParticipants);
     const canvas_id = Number(canvasId);
 
     try {
@@ -173,7 +170,7 @@ export class GroupService {
 
         const group = manager.create(Group, {
           name: groupName,
-          maxParticipants: max,
+          maxParticipants: maxParticipants,
           createdAt: new Date(),
           updatedAt: new Date(),
           madeBy: made_by_user.id,
@@ -460,12 +457,8 @@ export class GroupService {
       await this.awsService.deleteObject(oldURL);
     }
 
-    // const pathname = extractKeyFromPresignedUrl(overlay.url);
-    const objectURL = constructS3PublicUrl(
-      process.env.AWS_S3_BUCKET!,
-      process.env.AWS_REGION!,
-      oldURL
-    );
+    const pathname = extractKeyFromPresignedUrl(overlay.url);
+    const objectURL = await this.awsService.getPreSignedUrl(pathname);
 
     const overlayData = {
       url: objectURL,
@@ -475,7 +468,15 @@ export class GroupService {
       width: overlay.width,
     };
 
-    await this.updateGroupOverlayToDB(group, overlayData);
+    const saveData = {
+      url: pathname,
+      x: overlay.x,
+      y: overlay.y,
+      height: overlay.height,
+      width: overlay.width,
+    };
+
+    this.updateGroupOverlayToDB(group, saveData);
     return overlayData;
   }
 
@@ -484,6 +485,8 @@ export class GroupService {
       `select url, overlay_x as x, overlay_y as y, overlay_height as height, overlay_width as width from groups where id=$1::integer`,
       [Number(group_id)]
     );
+    const realURL = await this.awsService.getPreSignedUrl(result[0].url);
+    result[0].url = realURL;
     return result;
   }
 

@@ -25,6 +25,12 @@ export class CanvasHistory {
   @Column({ name: 'top_own_user_count', type: 'integer', nullable: true })
   topOwnUserCount: number | null;
 
+  @Column({ name: 'image_url', type: 'varchar', length: 1024 })
+  img_url: string;
+
+  @Column({ name: 'captured_at', type: 'timestamp' })
+  caputred_at: Date;
+
   @ManyToOne(() => Canvas, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'canvas_id' })
   canvas: Canvas;
@@ -36,4 +42,4 @@ export class CanvasHistory {
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'top_own_user_id' })
   topOwnUser: User | null;
-} 
+}
