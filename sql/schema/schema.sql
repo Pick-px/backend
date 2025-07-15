@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS question_user (
     user_id BIGINT NOT NULL,
     question_id BIGINT NOT NULL,
     submitted_answer INTEGER,
-    is_correct BOOLEAN NOT NULL,
+    is_correct BOOLEAN NOT NULL default true,
     submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
