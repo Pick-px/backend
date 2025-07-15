@@ -7,7 +7,7 @@ import { GameController } from './game.controller';
 import { GameService } from './game.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GameUserResult } from './entity/game_result.entity';
-import { Question } from 'src/entity/questions.entity';
+import { Question } from 'src/game/entity/questions.entity';
 import { QuestionUser } from './entity/question_user.entity';
 import { AuthModule } from '../auth/auth.module';
 import { CanvasModule } from '../canvas/canvas.module';
@@ -21,19 +21,19 @@ import { DatabaseModule } from '../database/database.module';
     DatabaseModule,
   ],
   providers: [
-    GameLogicService, 
-    GameStateService, 
-    GamePixelService, 
+    GameLogicService,
+    GameStateService,
+    GamePixelService,
     GameFlushService,
-    GameService
+    GameService,
   ],
   controllers: [GameController],
   exports: [
-    GameLogicService, 
-    GameStateService, 
-    GamePixelService, 
+    GameLogicService,
+    GameStateService,
+    GamePixelService,
     GameFlushService,
-    GameService
+    GameService,
   ],
 })
 export class GameModule {}

@@ -5,7 +5,8 @@ class WaitingResponseDto {
 
 class QuestionDto {
   id: number;
-  context: string;
+  question: string;
+  options: string[];
   answer: number;
 }
 

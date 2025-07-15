@@ -162,10 +162,10 @@ ON CONFLICT (email) DO NOTHING;
 
 -- 문제 은행
 CREATE TABLE IF NOT EXISTS questions (
-    id bigserial PRIMARY KEY,
-    content TEXT NOT NULL,
-    answer INTEGER NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id bigint PRIMARY KEY,
+    question TEXT NOT NULL,
+    options TEXT[] NOT NULL,
+    answer INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS question_user (
