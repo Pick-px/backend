@@ -6,7 +6,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { WaitingResponseDto, QuestionDto } from './dto/waitingResponse.dto';
 import { GameService } from './game.service';
 import { generatorColor } from '../util/colorGenerator.util';
@@ -20,6 +20,7 @@ export class GameController {
 
   @Get('waitingroom')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   async waitingGame(
     @Req() req: AuthRequest,
     @Query('canvasId') canvasId: string
