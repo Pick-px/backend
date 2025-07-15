@@ -6,6 +6,7 @@ import { UserCanvas } from '../entity/UserCanvas.entity';
 import { Pixel } from '../pixel/entity/pixel.entity';
 import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
+import { AwsService } from '../aws/aws.service';
 
 @Injectable()
 export class CanvasHistoryService {
@@ -20,7 +21,8 @@ export class CanvasHistoryService {
     private readonly canvasHistoryRepository: Repository<CanvasHistory>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly dataSource: DataSource
+    private readonly dataSource: DataSource,
+    private readonly awsService: AwsService // AwsService DI 추가
   ) {}
 
   /**
@@ -127,7 +129,7 @@ export class CanvasHistoryService {
         ch.total_try_count,
         ch.top_try_user_count,
         ch.top_own_user_count,
-        c.url as image_url,
+        ch.image_url as image_url,
         top_try_user.user_name as top_try_user_name,
         top_own_user.user_name as top_own_user_name
       FROM canvases c
@@ -141,21 +143,35 @@ export class CanvasHistoryService {
     `;
 
     const results = await this.dataSource.query(query);
-    
-    return results.map(row => ({
-      image_url: row.image_url,
-      title: row.title,
-      type: row.type,
-      created_at: row.created_at,
-      ended_at: row.ended_at,
-      size_x: row.size_x,
-      size_y: row.size_y,
-      participant_count: row.participant_count,
-      total_try_count: row.total_try_count,
-      top_try_user_name: row.top_try_user_name ?? null,
-      top_try_user_count: row.top_try_user_count ?? null,
-      top_own_user_name: row.top_own_user_name ?? null,
-      top_own_user_count: row.top_own_user_count ?? null
+    // presigned URL 변환 (비동기 map)
+    return await Promise.all(results.map(async row => {
+      let presignedUrl: string | null = null;
+      if (row.image_url) {
+        try {
+          presignedUrl = await this.awsService.getPreSignedUrl(row.image_url);
+          console.log(`[GalleryData] presignedUrl 생성: key=${row.image_url}, url=${presignedUrl}`);
+        } catch (e) {
+          console.error(`[GalleryData] presignedUrl 생성 실패: key=${row.image_url}`, e);
+          presignedUrl = null;
+        }
+      } else {
+        console.log(`[GalleryData] image_url 없음: row=`, row);
+      }
+      return {
+        image_url: presignedUrl,
+        title: row.title,
+        type: row.type,
+        created_at: row.created_at,
+        ended_at: row.ended_at,
+        size_x: row.size_x,
+        size_y: row.size_y,
+        participant_count: row.participant_count,
+        total_try_count: row.total_try_count,
+        top_try_user_name: row.top_try_user_name ?? null,
+        top_try_user_count: row.top_try_user_count ?? null,
+        top_own_user_name: row.top_own_user_name ?? null,
+        top_own_user_count: row.top_own_user_count ?? null
+      };
     }));
   }
 } 
