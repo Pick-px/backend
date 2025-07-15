@@ -14,6 +14,7 @@ import { generatorColor } from '../util/colorGenerator.util';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AuthRequest } from '../interface/AuthRequest.interface';
 import { UploadQuestionDto } from './dto/uploadQuestion.dto';
+import { GameStateService } from './game-state.service';
 
 interface UploadRequet {
   questions: UploadQuestionDto[];
@@ -22,7 +23,10 @@ interface UploadRequet {
 @ApiTags('canvas')
 @Controller('api/game')
 export class GameController {
-  constructor(private readonly gameService: GameService) {}
+  constructor(
+    private readonly gameService: GameService,
+    private readonly gameStateService: GameStateService,
+  ) {}
 
   @Get('waitingroom')
   @UseGuards(JwtAuthGuard)
@@ -35,9 +39,15 @@ export class GameController {
     try {
       const user_id = req.user?._id;
       console.log(`[GameController] 유저 정보: userId=${user_id}`);
-
-      const color = generatorColor();
-      console.log(`[GameController] 색 생성: color=${color}`);
+      
+      // 1. 현재 캔버스에 참가한 모든 유저 목록 조회
+      const allUsers = await this.gameStateService.getAllUsersInGame(canvasId);
+      // 2. 유저 인덱스(idx)와 전체 인원(maxPeople) 계산
+      const idx = allUsers.findIndex((id) => String(id) === String(user_id));
+      const maxPeople = 1000;
+      // 3. 중복 없는 색상 배정
+      const color = generatorColor(idx >= 0 ? idx : allUsers.length, maxPeople);
+      console.log(`[GameController] 색 생성: idx=${idx}, color=${color}`);
 
       const questions: QuestionDto[] = await this.gameService.getQuestions();
       console.log(

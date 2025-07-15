@@ -70,33 +70,15 @@ export class GameService {
     );
     try {
       await this.dataSource.transaction(async (manager) => {
-        try {
-          await manager.save(GameUserResult, {
-            user: { id: user_id },
-            canvas: { id: Number(canvasId) },
-            rank: 0,
-            color: color,
-            createdAt: new Date(),
-          });
-          console.log(
-            `[GameService] game_user_result 저장 성공: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
-          );
-        } catch (err) {
-          console.error(
-            `[GameService] game_user_result 저장 실패: user_id=${user_id}, canvas_id=${canvasId}, color=${color}, 에러=${err.message}`
-          );
-          // 직접 쿼리로도 시도
-          await manager.query(
-            `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, rank, life, created_at)
-             VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [user_id, canvasId, color, 0, 2]
-          );
-          console.log(
-            `[GameService] game_user_result 직접 쿼리로 저장 시도: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
-          );
-        }
+        // TypeORM save 제거, 직접 쿼리만 사용
+        await manager.query(
+          `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, rank, life, created_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
+           ON CONFLICT (user_id, canvas_id) DO NOTHING`,
+          [user_id, canvasId, color, 0, 2]
+        );
         console.log(
-          `[GameService] game_user_result 저장 시도 완료: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
+          `[GameService] game_user_result 직접 쿼리로 저장: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
         );
 
         console.log(

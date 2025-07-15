@@ -241,32 +241,24 @@ export class CanvasGateway implements OnGatewayInit {
   // 중복되지 않는 색 배정
   private async assignUniqueColor(canvasId: string, userId: string): Promise<string> {
     const { generatorColor } = await import('../util/colorGenerator.util');
-    const maxAttempts = 50; // 최대 50번 시도
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const color = generatorColor();
-      
-      // 해당 캔버스에서 이미 사용 중인 색인지 확인
-      const allUsers = await this.gameStateService.getAllUsersInGame(canvasId);
-      let isColorUsed = false;
-      
-      for (const uid of allUsers) {
-        if (uid === userId) continue; // 자기 자신은 제외
-        const userColor = await this.gameStateService.getUserColor(canvasId, uid);
-        if (userColor === color) {
-          isColorUsed = true;
-          break;
-        }
-      }
-      
-      if (!isColorUsed) {
+    const maxColors = 1000;
+    // 1. 이미 사용 중인 색상 집합
+    const allUsers = await this.gameStateService.getAllUsersInGame(canvasId);
+    const usedColors = new Set<string>();
+    for (const uid of allUsers) {
+      if (uid === userId) continue;
+      const userColor = await this.gameStateService.getUserColor(canvasId, uid);
+      if (userColor) usedColors.add(userColor);
+    }
+    // 2. 미사용 색상 인덱스 리스트
+    for (let i = 0; i < maxColors; i++) {
+      const color = generatorColor(i, maxColors);
+      if (!usedColors.has(color)) {
         return color;
       }
     }
-    
-    // 50번 시도 후에도 중복되지 않는 색을 못 찾으면 마지막 생성된 색 사용
-    console.warn(`[CanvasGateway] 색 중복 방지 실패, 마지막 색 사용: userId=${userId}`);
-    return generatorColor();
+    // 3. 모든 색상이 다 쓰였으면 fallback
+    return '#ffffff';
   }
 
   // 픽셀 그리기 요청
