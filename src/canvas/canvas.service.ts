@@ -41,6 +41,7 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(`[tryDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`);
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
@@ -318,6 +319,7 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
+    console.log(`[applyDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`);
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
@@ -333,12 +335,13 @@ export class CanvasService {
     );
 
     if (!is_locked) {
+      console.warn(`[applyDrawPixel] 동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       // 이미 다른 사용자가 락을 선점한 경우
-      console.warn(`동시성 발생! canvas-id : ${canvas_id}, ${x}:${y}`);
       return false;
     }
 
     try {
+      console.log(`[applyDrawPixel] 락 획득, tryDrawPixel 호출`);
       // 실제 픽셀 저장
       return await this.tryDrawPixel({ canvas_id, x, y, color, userId });
     } finally {
@@ -386,6 +389,15 @@ export class CanvasService {
     };
   }
 
+  // 캔버스 타입 조회 메서드 추가
+  async getCanvasType(canvas_id: string): Promise<string | null> {
+    if (!canvas_id) return null;
+    const idNum = Number(canvas_id);
+    if (isNaN(idNum)) return null;
+    const meta = await this.canvasRepository.findOneBy({ id: idNum });
+    return meta?.type ?? null;
+  }
+
   // 쿨다운 적용 픽셀 그리기
   async applyDrawPixelWithCooldown({
     canvas_id,
@@ -400,6 +412,34 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<DrawPixelResponse> {
+    // 캔버스 타입 조회
+    const canvasType = await this.getCanvasType(canvas_id);
+    // 게임 모드면 쿨다운 1초, 그 외는 10초
+    const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 10;
+    console.log(`[CanvasService] 쿨다운 설정: canvasType=${canvasType}, cooldownSeconds=${cooldownSeconds}`);
+
+    // 게임 캔버스인 경우 게임 시간 체크
+    if (canvasType === 'game_calculation') {
+      const canvasInfo = await this.getCanvasById(canvas_id);
+      const now = new Date();
+      
+      if (canvasInfo?.metaData?.startedAt && now < canvasInfo.metaData.startedAt) {
+        console.log(`[CanvasService] 게임 시작 전 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`);
+        return {
+          success: false,
+          message: '게임이 아직 시작되지 않았습니다.',
+        };
+      }
+      
+      if (canvasInfo?.metaData?.endedAt && now > canvasInfo.metaData.endedAt) {
+        console.log(`[CanvasService] 게임 종료 후 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`);
+        return {
+          success: false,
+          message: '게임이 이미 종료되었습니다.',
+        };
+      }
+    }
+
     // 캔버스 활성 상태 먼저 체크
     const isActive = await this.isCanvasActive(parseInt(canvas_id));
     console.log(
@@ -415,12 +455,13 @@ export class CanvasService {
       };
     }
     const cooldownKey = `cooldown:${userId}:${canvas_id}`;
-    const cooldownSeconds = 10;
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);
+    console.log(`[CanvasService] 쿨다운 확인: userId=${userId}, canvasId=${canvas_id}, ttl=${ttl}`);
 
     if (ttl > 0) {
+      console.log(`[CanvasService] 쿨다운 중: userId=${userId}, remaining=${ttl}`);
       return { success: false, message: '쿨다운 중', remaining: ttl };
     }
 
@@ -433,20 +474,22 @@ export class CanvasService {
       userId,
     });
 
+    if (result) {
+      // 쿨다운 설정
+      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
+      console.log(`[CanvasService] 쿨다운 설정 완료: userId=${userId}, canvasId=${canvas_id}, seconds=${cooldownSeconds}`);
+    }
+
     // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
       await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+      console.log(`[CanvasService] 유저 캔버스 카운트 증가 완료: userId=${userId}, canvasId=${canvas_id}`);
     } catch (error) {
       console.error('사용자 캔버스 카운트 증가 실패:', error);
       // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
     }
 
-    if (result) {
-      await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
-      return { success: true, cooldown: cooldownSeconds };
-    } else {
-      return { success: false, message: '픽셀 저장 실패' };
-    }
+    return { success: result, message: result ? '성공' : '실패' };
   }
 
   // 쿨다운 적용 픽셀 그리기 for simulation

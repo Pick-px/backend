@@ -1,35 +1,34 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Canvas } from '../entity/canvas.entity';
-import { GroupService } from '../../group/group.service';
-import { Repository } from 'typeorm';
 import { CanvasCreationStrategy } from '../interface/canvasCreateStrategy.interface';
 import { createCanvasDto } from '../dto/create_canvas_dto.dto';
-import { PixelService } from '../../pixel/pixel.service';
-import { CanvasService } from '../canvas.service';
+import { Canvas } from '../entity/canvas.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
+import { PixelService } from '../../pixel/pixel.service';
+import { GroupService } from '../../group/group.service';
+import { CanvasService } from '../canvas.service';
+
 @Injectable()
-export class EventCanvasStrategy
+export class GameCalculationCanvasStrategy
   extends AbstractCanvasStrategy
   implements CanvasCreationStrategy
 {
   constructor(
     @InjectRepository(Canvas)
     private readonly canvasRepository: Repository<Canvas>,
-    groupService: GroupService,
+    pixelService: PixelService,
     @Inject(forwardRef(() => CanvasService))
     canvasService: CanvasService,
-    pixelService: PixelService
+    groupService: GroupService
   ) {
     super(pixelService, canvasService, groupService);
   }
-
-  async create(dto: createCanvasDto): Promise<Canvas> {
-    const { title, size_x, size_y, startedAt, endedAt } = dto;
-
+  async create(createCanvasDto: createCanvasDto): Promise<Canvas> {
+    const { title, size_x, size_y, startedAt, endedAt } = createCanvasDto;
     const canvas = this.canvasRepository.create({
       title,
-      type: 'event',
+      type: 'game_calculation',
       sizeX: size_x,
       sizeY: size_y,
       createdAt: new Date(),

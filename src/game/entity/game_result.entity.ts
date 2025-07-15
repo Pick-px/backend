@@ -19,6 +19,9 @@ export class GameUserResult {
   @Column({ name: 'assigned_color', type: 'varchar' })
   color: string;
 
+  @Column({ name: 'life', type: 'int', default: 2 })
+  life: number;
+
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
