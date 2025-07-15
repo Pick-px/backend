@@ -49,6 +49,8 @@ export class GameController {
         `[GameController] 게임 데이터 조회 완료: canvasId=${canvasId}`
       );
 
+      console.log('waiting room data: ', data);
+
       await this.gameService.setGameReady(color, user_id, canvasId, questions);
       console.log(
         `[GameController] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}`
