@@ -14,6 +14,7 @@ const startWorker = new Worker(
       canvas_id: canvas_id,
       title: title,
       started_at: startedAt,
+      remaining_time: 30,
     });
 
     console.log('✅ 알림 전송 완료');

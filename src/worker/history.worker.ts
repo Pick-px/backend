@@ -5,12 +5,10 @@ import { generatorPixelToImg } from '../util/imageGenerator.util';
 import { uploadBufferToS3 } from '../util/s3UploadFile.util';
 import { randomUUID } from 'crypto';
 import { redisConnection } from '../queues/bullmq.config';
-import { ImageHistory } from '../canvas/entity/imageHistory.entity';
 import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
 
 const pixelRepository = AppDataSource.getRepository(Pixel);
 const historyRepository = AppDataSource.getRepository(CanvasHistory);
-const imgRepository = AppDataSource.getRepository(ImageHistory);
 
 const historyWorker = new Worker(
   'canvas-history',
@@ -37,11 +35,10 @@ const historyWorker = new Worker(
 
     if (!history) throw new Error('CanvasHistory not found');
 
-    await imgRepository.save({
-      canvasHistory: history,
-      image_url: key,
-      captured_at: new Date(),
-    });
+    history.img_url = key;
+    history.caputred_at = new Date();
+
+    await historyRepository.save(history);
 
     // 캔버스 히스토리 데이터 생성 (public이 아닌 캔버스만)
     if (type !== 'public') {

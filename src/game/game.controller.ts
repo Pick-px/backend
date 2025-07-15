@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  InternalServerErrorException,
-  UseGuards,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, UseGuards, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { WaitingResponseDto, QuestionDto } from './dto/waitingResponse.dto';
 import { GameService } from './game.service';
