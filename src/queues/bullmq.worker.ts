@@ -6,7 +6,7 @@ import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
-import '../../src/worker/history.worker';
+import './history.worker';
 
 config();
 
