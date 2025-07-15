@@ -38,6 +38,7 @@ export class GameCalculationCanvasStrategy
     const newCanvas = await this.canvasRepository.save(canvas);
     await this.runPostCreationSteps(newCanvas);
     await this.isEndingWithOneDay(newCanvas);
+    await this.putJobOnStartQueue(newCanvas);
     return newCanvas;
   }
 }

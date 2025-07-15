@@ -11,8 +11,8 @@ import { CanvasService } from './canvas.service';
 import Redis from 'ioredis';
 import { Inject } from '@nestjs/common';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
-import { PixelUpdateEvent } from '../interface/PixelInfo.interface';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { setSocketServer } from '../socket/socket.manager';
 import { GameLogicService } from '../game/game-logic.service';
 
 interface SocketUser {
@@ -43,7 +43,7 @@ export class CanvasGateway implements OnGatewayInit {
 
   afterInit(server: Server) {
     console.log('[CanvasGateway] afterInit 메서드 호출됨');
-
+    setSocketServer(this.server);
     // AppGateway 초기화 완료 대기
     setTimeout(() => {
       this.initializeRedisAdapter(server);
@@ -104,7 +104,9 @@ export class CanvasGateway implements OnGatewayInit {
   }
 
   // Redis 세션에서 전체 유저 정보 가져오기 (username 등 활용 가능)
-  private async getUserInfoFromClient(client: Socket): Promise<SocketUser | null> {
+  private async getUserInfoFromClient(
+    client: Socket
+  ): Promise<SocketUser | null> {
     try {
       const sessionKey = `socket:${client.id}:user`;
       const userData = await this.redis.get(sessionKey);
@@ -192,6 +194,15 @@ export class CanvasGateway implements OnGatewayInit {
     console.log(
       `[CanvasGateway] 소켓 ${client.id}가 캔버스 ${canvasId}에 참여함 (로그인: ${userId ? '예' : '아니오'})`
     );
+
+    // 게임 캔버스인 경우 유저 초기화
+    if (userId) {
+      const canvasType = await this.canvasService.getCanvasType(data.canvas_id);
+      if (canvasType === 'game_calculation') {
+        // 게임 캔버스: 유저 상태 초기화 (life=2, try_count=0, own_count=0, dead=false)
+        await this.gameLogicService.initializeUserForGame(data.canvas_id, String(userId));
+      }
+    }
 
     // 쿨다운 정보 자동 푸시
     if (userId && data.canvas_id) {

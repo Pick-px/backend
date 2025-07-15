@@ -456,15 +456,15 @@ export class GroupService {
     const oldURL = group.url;
 
     if (oldURL != null) {
-      const key = extractKeyFromPresignedUrl(oldURL);
-      await this.awsService.deleteObject(key);
+      // const key = extractKeyFromPresignedUrl(oldURL);
+      await this.awsService.deleteObject(oldURL);
     }
 
-    const pathname = extractKeyFromPresignedUrl(overlay.url);
+    // const pathname = extractKeyFromPresignedUrl(overlay.url);
     const objectURL = constructS3PublicUrl(
       process.env.AWS_S3_BUCKET!,
       process.env.AWS_REGION!,
-      pathname
+      oldURL
     );
 
     const overlayData = {

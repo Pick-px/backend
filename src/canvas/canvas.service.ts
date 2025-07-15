@@ -4,7 +4,6 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Canvas } from './entity/canvas.entity';
 import Redis from 'ioredis';
-import { Group } from '../group/entity/group.entity';
 import { UserCanvas } from '../entity/UserCanvas.entity';
 import { CanvasInfo } from '../interface/CanvasInfo.interface';
 import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';

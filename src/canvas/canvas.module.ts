@@ -12,8 +12,6 @@ import { CanvasHistory } from './entity/canvasHistory.entity';
 import { User } from '../user/entity/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
-import { BullModule } from '@nestjs/bull';
-import { redisConnection } from '../queues/bullmq.config';
 import { GroupModule } from '../group/group.module';
 import { PixelModule } from '../pixel/pixel.module';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
@@ -41,13 +39,6 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
     ]),
     JwtModule.register({}),
     AuthModule,
-    BullModule.registerQueueAsync({
-      name: 'canvas-history',
-      useFactory: () => ({
-        name: 'canvas-history',
-        connection: redisConnection,
-      }),
-    }),
     GroupModule,
     PixelModule,
     forwardRef(() => GameModule), // GameModule 추가
@@ -63,6 +54,6 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
     EventColorLimitCanvasStrategy,
     CanvasHistoryService,
   ],
-  exports: [CanvasService, BullModule, CanvasHistoryService],
+  exports: [CanvasService, CanvasHistoryService],
 })
 export class CanvasModule {}

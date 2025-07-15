@@ -67,16 +67,23 @@ export class GameFlushService {
         this.redis.hget(`game:${canvasId}:user:${userId}`, 'dead'),
         this.redis.hget(`game:${canvasId}:user:${userId}`, 'life'),
       ]);
-      // DB update (UserCanvas 등)
+      
+      // user_canvas 테이블에 UPSERT
       await this.dataSource.query(
-        'UPDATE user_canvas SET own_count=$1, try_count=$2, dead=$3, life=$4 WHERE canvas_id=$5 AND user_id=$6',
-        [ownCount, tryCount, dead === '1', life, canvasId, userId]
+        `INSERT INTO user_canvas (user_id, canvas_id, own_count, try_count, joined_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, canvas_id) 
+         DO UPDATE SET own_count = $3, try_count = $4`,
+        [userId, canvasId, ownCount || 0, tryCount || 0]
       );
+      
       // game_user_result에도 life 반영 (있을 경우)
       await this.dataSource.query(
         'UPDATE game_user_result SET life=$1 WHERE canvas_id=$2 AND user_id=$3',
-        [life, canvasId, userId]
+        [life || 2, canvasId, userId]
       );
+      
+      console.log(`[GameFlushService] 유저 상태 flush 완료: userId=${userId}, own_count=${ownCount}, try_count=${tryCount}, life=${life}`);
     }
     await this.redis.del(dirtySetKey);
   }
