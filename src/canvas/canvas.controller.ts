@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
-import { PixelInfo } from '../interface/PixelInfo.interface';
 import {
   ApiTags,
   ApiOperation,
@@ -23,7 +22,7 @@ import {
 import { Response } from 'express';
 import * as zlib from 'zlib';
 
-@ApiTags('api/canvas')
+@ApiTags('canvas')
 @Controller('api/canvas')
 export class CanvasController {
   constructor(private readonly canvasService: CanvasService) {}

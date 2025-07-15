@@ -200,9 +200,10 @@ CREATE TABLE IF NOT EXISTS questions (
 CREATE TABLE IF NOT EXISTS question_user (
     id bigserial PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    canvas_id BIGINT NOT NULL,
     question_id BIGINT NOT NULL,
     submitted_answer INTEGER,
-    is_correct BOOLEAN NOT NULL,
+    is_correct BOOLEAN NOT NULL default true,
     submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
@@ -218,6 +219,5 @@ CREATE TABLE IF NOT EXISTS game_user_result (
     life INTEGER DEFAULT 2,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE,
-    UNIQUE (user_id, canvas_id)
+    FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
 );

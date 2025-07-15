@@ -26,6 +26,10 @@ export class GameFlushService {
 
   // 픽셀 batch flush
   async flushDirtyPixels(canvasId: string) {
+    if (!this.dataSource.isInitialized) {
+      console.warn('[GameFlushService] DataSource not initialized. Re-initializing...');
+      await this.dataSource.initialize();
+    }
     const dirtySetKey = `dirty_pixels:${canvasId}`;
     const fields = await this.redis.smembers(dirtySetKey);
     if (fields.length === 0) return;
@@ -55,10 +59,20 @@ export class GameFlushService {
 
   // 유저 batch flush
   async flushDirtyUsers(canvasId: string) {
+    if (!this.dataSource.isInitialized) {
+      console.warn('[GameFlushService] DataSource not initialized. Re-initializing...');
+      await this.dataSource.initialize();
+    }
     const dirtySetKey = `dirty_users:${canvasId}`;
     await this.redis.expire(dirtySetKey, 3600);
     const userIds = await this.redis.smembers(dirtySetKey);
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) {
+      console.log(`[GameFlushService] flush할 유저 없음: canvasId=${canvasId}`);
+      return;
+    }
+    
+    console.log(`[GameFlushService] 유저 flush 시작: canvasId=${canvasId}, users=${userIds.length}명`);
+    
     for (const userId of userIds) {
       // own_count, try_count, dead, life 등 Redis에서 조회
       const [ownCount, tryCount, dead, life] = await Promise.all([
@@ -67,6 +81,8 @@ export class GameFlushService {
         this.redis.hget(`game:${canvasId}:user:${userId}`, 'dead'),
         this.redis.hget(`game:${canvasId}:user:${userId}`, 'life'),
       ]);
+      
+      console.log(`[GameFlushService] 유저 상태 조회: userId=${userId}, own_count=${ownCount}, try_count=${tryCount}, dead=${dead}, life=${life}`);
       
       // user_canvas 테이블에 UPSERT
       await this.dataSource.query(
@@ -86,15 +102,35 @@ export class GameFlushService {
       console.log(`[GameFlushService] 유저 상태 flush 완료: userId=${userId}, own_count=${ownCount}, try_count=${tryCount}, life=${life}`);
     }
     await this.redis.del(dirtySetKey);
+    console.log(`[GameFlushService] 유저 flush 완료: canvasId=${canvasId}, 총 ${userIds.length}명`);
   }
 
   // 1초마다 또는 batch 10개마다 flush
   async flushLoop(canvasId: string) {
+    console.log(`[GameFlushService] flush 루프 시작: canvasId=${canvasId}`);
     setInterval(async () => {
       const pixelCount = await this.redis.scard(`dirty_pixels:${canvasId}`);
       const userCount = await this.redis.scard(`dirty_users:${canvasId}`);
-      if (pixelCount >= 10) await this.flushDirtyPixels(canvasId);
-      if (userCount >= 10) await this.flushDirtyUsers(canvasId);
+      
+      // 게임에서는 더 자주 flush (1개 이상이면 flush)
+      if (pixelCount >= 10) {
+        console.log(`[GameFlushService] 픽셀 배치 flush 실행: canvasId=${canvasId}, count=${pixelCount}`);
+        await this.flushDirtyPixels(canvasId);
+      }
+      if (userCount >= 10) {
+        console.log(`[GameFlushService] 유저 배치 flush 실행: canvasId=${canvasId}, count=${userCount}`);
+        await this.flushDirtyUsers(canvasId);
+      }
+      
+      // 30초마다 강제 flush (안전장치)
+      const now = Date.now();
+      const lastForceFlush = await this.redis.get(`last_force_flush:${canvasId}`);
+      if (!lastForceFlush || (now - parseInt(lastForceFlush)) > 30000) {
+        console.log(`[GameFlushService] 강제 flush 실행: canvasId=${canvasId}`);
+        await this.flushDirtyPixels(canvasId);
+        await this.flushDirtyUsers(canvasId);
+        await this.redis.setex(`last_force_flush:${canvasId}`, 60, now.toString());
+      }
     }, 1000);
   }
 } 

@@ -501,7 +501,7 @@ export class GroupService {
       name: '전체',
       createdAt: canvas.createdAt,
       updatedAt: canvas.createdAt,
-      maxParticipants: 100, // 전체 채팅 최대 인원(추후 변경 가능)
+      maxParticipants: 200, // 전체 채팅 최대 인원(추후 변경 가능)
       currentParticipantsCount: 1,
       canvasId: canvas.id,
       madeBy: 1, // 1번 관리자 계정으로 고정
