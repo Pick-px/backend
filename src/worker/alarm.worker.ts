@@ -4,8 +4,8 @@ import { redisConnection } from '../queues/bullmq.config';
 import { Server } from 'socket.io';
 import { getSocketServer } from '../socket/socket.manager';
 
-const startWorker = new Worker(
-  'canvas-start',
+const alarmWorker = new Worker(
+  'canvas-alarm',
   async (job: Job) => {
     const { canvas_id, title, startedAt } = job.data;
 
@@ -14,18 +14,17 @@ const startWorker = new Worker(
       canvas_id: canvas_id,
       title: title,
       started_at: startedAt,
-      remaining_time: 30,
     });
 
     console.log('✅ 알림 전송 완료');
   },
   { connection: redisConnection }
 );
-startWorker.on('completed', (job) => {
+alarmWorker.on('completed', (job) => {
   console.log(`✅ [Worker] Job completed: ${job.id}`);
 });
 
-startWorker.on('failed', (job, err) => {
+alarmWorker.on('failed', (job, err) => {
   console.error(`❌ [Worker] Job failed: ${job?.id}`, err);
 });
-export { startWorker };
+export { alarmWorker };
