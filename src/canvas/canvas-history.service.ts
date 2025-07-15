@@ -137,8 +137,8 @@ export class CanvasHistoryService {
       LEFT JOIN users top_try_user ON ch.top_try_user_id = top_try_user.id
       LEFT JOIN users top_own_user ON ch.top_own_user_id = top_own_user.id
       WHERE c.ended_at IS NOT NULL 
-        AND c.ended_at <= NOW()
-        AND c.type IN ('event', 'game')
+        AND c.ended_at <= (NOW() AT TIME ZONE 'Asia/Seoul')
+        AND c.type IN ('event_common', 'event_colorlimit', 'game_calculation')
       ORDER BY c.ended_at DESC
     `;
 
