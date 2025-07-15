@@ -133,6 +133,11 @@ jobs:
             --from-literal=google-client-id="${{ secrets.GOOGLE_CLIENT_ID }}" \
             --from-literal=google-client-secret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             --from-literal=google-redirect-uri="${{ secrets.GOOGLE_REDIRECT_URI }}" \
+            --from-literal=aws-access-key-id="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=aws-secret-access-key="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --from-literal=aws-region="${{ secrets.AWS_REGION }}" \
+            --from-literal=aws-s3-bucket="${{ secrets.AWS_S3_BUCKET }}" \
+
             --namespace=$NAMESPACE \
             --dry-run=client -o yaml | kubectl apply -f -
 
