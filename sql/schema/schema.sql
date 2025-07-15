@@ -192,3 +192,7 @@ CREATE TABLE IF NOT EXISTS game_user_result (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
 );
+
+-- game_user_result 중복 방지 인덱스
+CREATE UNIQUE INDEX IF NOT EXISTS idx_game_user_result_user_canvas
+  ON game_user_result (user_id, canvas_id);
