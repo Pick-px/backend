@@ -23,6 +23,8 @@ import { GameCalculationCanvasStrategy } from './strategy/gameCalculationCanvasS
 import { EventCommonCanvasStrategy } from './strategy/eventCommonCanvasStrategy.strategy';
 import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasStrategy.strategy';
 import { AwsModule } from '../aws/aws.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
 
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { AwsModule } from '../aws/aws.module';
       UserCanvas,
       CanvasHistory,
     ]),
+    ScheduleModule.forRoot(),
     JwtModule.register({}),
     AuthModule,
     GroupModule,
@@ -53,6 +56,7 @@ import { AwsModule } from '../aws/aws.module';
     EventCommonCanvasStrategy,
     EventColorLimitCanvasStrategy,
     CanvasHistoryService,
+    CanvasHistoryBatch,
   ],
   exports: [CanvasService, CanvasHistoryService],
 })

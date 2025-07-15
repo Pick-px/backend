@@ -8,6 +8,12 @@ import { AbstractCanvasStrategy } from './AbstractCanvasStrategy.strategy';
 import { PixelService } from '../../pixel/pixel.service';
 import { GroupService } from '../../group/group.service';
 import { CanvasService } from '../canvas.service';
+import {
+  isEndingWithOneDay,
+  putJobOnAlarmQueue3SecsBeforeStart,
+  putJobOnAlarmQueueBeforeStart30s,
+  putJobOnAlarmQueueThreeSecBeforeEnd,
+} from '../../util/alarmGenerator.util';
 
 @Injectable()
 export class GameCalculationCanvasStrategy
@@ -37,8 +43,10 @@ export class GameCalculationCanvasStrategy
     });
     const newCanvas = await this.canvasRepository.save(canvas);
     await this.runPostCreationSteps(newCanvas);
-    await this.isEndingWithOneDay(newCanvas);
-    await this.putJobOnStartQueue(newCanvas);
+    await isEndingWithOneDay(newCanvas);
+    await putJobOnAlarmQueueBeforeStart30s(newCanvas);
+    await putJobOnAlarmQueue3SecsBeforeStart(newCanvas);
+    await putJobOnAlarmQueueThreeSecBeforeEnd(newCanvas);
     return newCanvas;
   }
 }

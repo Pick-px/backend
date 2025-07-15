@@ -1,34 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 import { Canvas } from '../entity/canvas.entity';
 import { CanvasService } from '../canvas.service';
+import {
+  isEndingWithOneDay,
+  putJobOnAlarmQueue3SecsBeforeStart,
+  putJobOnAlarmQueueBeforeStart30s,
+  putJobOnAlarmQueueThreeSecBeforeEnd,
+} from 'src/util/alarmGenerator.util';
 
 @Injectable()
 export class CanvasHistoryBatch {
-  constructor(
-    private readonly canvasService: CanvasService,
-    @InjectQueue('canvas-history') private readonly historyQueue: Queue
-  ) {}
+  constructor(private readonly canvasService: CanvasService) {}
 
   @Cron('0 0 * * *') // 매일 자정에 실행
   async handleCanvasHistoryBatch() {
     const canvases: Canvas[] =
-      await this.canvasService.findCanvasesEndingWithinDays(3);
+      await this.canvasService.findCanvasesEndingWithinDays(1);
     for (const canvas of canvases) {
-      const jobId = `${canvas.id}`;
-      const now = Date.now();
-      const endedAtTime = new Date(canvas.endedAt).getTime();
-      const delay = endedAtTime - now;
-      await this.historyQueue.add(
-        'canvas-history',
-        { canvas_id: canvas.id },
-        {
-          jobId,
-          delay,
-        }
-      );
+      await isEndingWithOneDay(canvas);
+      if (canvas.type.startsWith('game_')) {
+        await putJobOnAlarmQueue3SecsBeforeStart(canvas);
+        await putJobOnAlarmQueueBeforeStart30s(canvas);
+        await putJobOnAlarmQueueThreeSecBeforeEnd(canvas);
+      }
     }
   }
 }
