@@ -26,7 +26,7 @@ export class GameService {
 
   async getQuestions(): Promise<QuestionDto[]> {
     const questions: QuestionDto[] = await this.dataSource.query(
-      'select id, context, answer from questions order by RANDOM()'
+      'select id, content, answer from questions order by RANDOM()'
     );
     return questions;
   }
