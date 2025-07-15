@@ -3,13 +3,14 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { Question } from '../entity/questions.entity';
+import { Question } from './entity/questions.entity';
 import { GameUserResult } from '../game/entity/game_result.entity';
 import { QuestionUser } from './entity/question_user.entity';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { QuestionDto, GameResponseData, Size } from './dto/waitingResponse.dto';
 import { CanvasService } from '../canvas/canvas.service';
+import { UploadQuestionDto } from './dto/uploadQuestion.dto';
 
 @Injectable()
 export class GameService {
@@ -127,6 +128,32 @@ export class GameService {
       );
       throw new InternalServerErrorException(
         '게임 준비 중 오류가 발생했습니다.'
+      );
+    }
+  }
+
+  async uploadQuestions(questions: UploadQuestionDto[]) {
+    try {
+      await this.questionRepository
+        .createQueryBuilder()
+        .insert()
+        .into(Question)
+        .values(
+          questions.map((question) => ({
+            id: Number(question.id),
+            question: question.question,
+            options: question.options,
+            answer: question.answer,
+          }))
+        )
+        .execute();
+      console.log(
+        `[GameService] 문제 업로드 완료: questions=${questions.length}개`
+      );
+    } catch (err) {
+      console.error(`[GameService] 문제 업로드 실패:`, err);
+      throw new InternalServerErrorException(
+        '문제 업로드 중 오류가 발생했습니다.'
       );
     }
   }
