@@ -25,6 +25,8 @@ import { ImageHistory } from './canvas/entity/imageHistory.entity';
 import { Question } from './entity/questions.entity';
 import { QuestionUser } from './game/entity/question_user.entity';
 import { GameUserResult } from './game/entity/game_result.entity';
+import { GameController } from './game/game.controller';
+import { GameModule } from './game/game.module';
 
 @Module({
   imports: [
@@ -110,8 +112,9 @@ import { GameUserResult } from './game/entity/game_result.entity';
     HttpModule,
     AwsModule,
     PixelModule,
+    GameModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, GameController],
   providers: [
     AppService,
     // Gateway 초기화 순서 보장

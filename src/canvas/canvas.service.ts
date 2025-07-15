@@ -249,7 +249,7 @@ export class CanvasService {
   }
 
   // 캔버스 활성 상태 체크 (Redis 캐시 우선, DB 폴백)
-  private async isCanvasActive(canvasId: number): Promise<boolean> {
+  async isCanvasActive(canvasId: number): Promise<boolean> {
     try {
       // 1. Redis 캐시에서 조회
       const cacheKey = `canvas:active:${canvasId}`;

@@ -19,6 +19,9 @@ export class QuestionUser {
   @Column({ name: 'question_id', type: 'bigint' })
   questionId: number;
 
+  @Column({ name: 'canvas_id', type: 'bigint' })
+  canvasId: number;
+
   @Column({ name: 'submitted_answer', type: 'int' })
   answer: number;
 
