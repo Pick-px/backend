@@ -22,6 +22,7 @@ import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
 import { GameCalculationCanvasStrategy } from './strategy/gameCalculationCanvasStrategy.strategy';
 import { EventCommonCanvasStrategy } from './strategy/eventCommonCanvasStrategy.strategy';
 import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasStrategy.strategy';
+import { AwsModule } from '../aws/aws.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
     GroupModule,
     PixelModule,
     forwardRef(() => GameModule), // GameModule 추가
+    AwsModule, // AwsModule 추가
   ],
   controllers: [CanvasController, GalleryController],
   providers: [
