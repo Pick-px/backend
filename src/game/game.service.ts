@@ -11,6 +11,8 @@ import { Repository, DataSource } from 'typeorm';
 import { QuestionDto, GameResponseData, Size } from './dto/waitingResponse.dto';
 import { CanvasService } from '../canvas/canvas.service';
 import { UploadQuestionDto } from './dto/uploadQuestion.dto';
+import { generatorColor } from '../util/colorGenerator.util';
+import { GameStateService } from './game-state.service';
 
 @Injectable()
 export class GameService {
@@ -22,6 +24,7 @@ export class GameService {
     @InjectRepository(QuestionUser)
     private readonly questionUserRepository: Repository<QuestionUser>,
     private readonly canvasService: CanvasService,
+    private readonly gameStateService: GameStateService,
     @InjectDataSource()
     private readonly dataSource: DataSource
   ) {}
@@ -60,26 +63,61 @@ export class GameService {
   }
 
   async setGameReady(
-    color: string,
     user_id: number,
     canvasId: string,
     questions: QuestionDto[]
-  ): Promise<void> {
+  ): Promise<string> {
     console.log(
-      `[GameService] 게임 준비 시작: userId=${user_id}, canvasId=${canvasId}, color=${color}, questions=${questions.length}개`
+      `[GameService] 게임 준비 시작: userId=${user_id}, canvasId=${canvasId}, questions=${questions.length}개`
     );
+    
+    // 1. Redis에서 기존 색상 확인
+    let color = await this.gameStateService.getUserColor(canvasId, String(user_id));
+    
+    if (!color) {
+      // 2. Redis에 없으면 DB에서 확인
+      const existingResult = await this.dataSource.query(
+        'SELECT assigned_color FROM game_user_result WHERE user_id = $1 AND canvas_id = $2',
+        [user_id, canvasId]
+      );
+      
+      if (existingResult.length > 0) {
+        // 3. DB에 있으면 Redis에 캐싱
+        color = existingResult[0].assigned_color;
+        await this.gameStateService.setUserColor(canvasId, String(user_id), color);
+        console.log(`[GameService] DB 색상 Redis 캐싱: userId=${user_id}, color=${color}`);
+      } else {
+        // 4. DB에도 없으면 새로 생성
+        color = generatorColor(user_id, canvasId, 1000);
+        console.log(`[GameService] 새 색상 생성: userId=${user_id}, color=${color}`);
+      }
+    } else {
+      console.log(`[GameService] Redis 색상 사용: userId=${user_id}, color=${color}`);
+    }
+    
     try {
       await this.dataSource.transaction(async (manager) => {
-        // TypeORM save 제거, 직접 쿼리만 사용
-        await manager.query(
-          `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, rank, life, created_at)
-           VALUES ($1, $2, $3, $4, $5, NOW())
-           ON CONFLICT (user_id, canvas_id) DO NOTHING`,
-          [user_id, canvasId, color, 0, 2]
+        // 기존 game_user_result가 있는지 확인
+        const existingResult = await manager.query(
+          'SELECT id FROM game_user_result WHERE user_id = $1 AND canvas_id = $2',
+          [user_id, canvasId]
         );
-        console.log(
-          `[GameService] game_user_result 직접 쿼리로 저장: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
-        );
+
+        if (existingResult.length === 0) {
+          // 새로운 유저: game_user_result 삽입
+          await manager.query(
+            `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, rank, life, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [user_id, canvasId, color, 0, 2]
+          );
+          console.log(
+            `[GameService] game_user_result 새로 생성: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
+          );
+        } else {
+          console.log(
+            `[GameService] game_user_result 이미 존재: user_id=${user_id}, canvas_id=${canvasId}`
+          );
+        }
 
         console.log(
           `[GameService] question_user 저장 시작: userId=${user_id}, questions=${questions.length}개`
@@ -100,8 +138,9 @@ export class GameService {
         console.log(`[GameService] question_user 저장 완료: userId=${user_id}`);
       });
       console.log(
-        `[GameService] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}`
+        `[GameService] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}, color=${color}`
       );
+      return color;
     } catch (err) {
       console.error(
         `[GameService] 게임 준비 실패: userId=${user_id}, canvasId=${canvasId}`,

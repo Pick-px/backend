@@ -1,37 +1,5 @@
 import * as crypto from 'crypto';
 
-/**
- * 기존 색상 생성 로직 (주석처리)
- */
-// function uuidToIndex(uuid: string, maxIndex: number = 1000): number {
-//   const hash = crypto.createHash('md5').update(uuid).digest('hex');
-//   const hashPrefix = hash.slice(0, 8);
-//   const numeric = parseInt(hashPrefix, 16);
-//   return numeric % maxIndex;
-// }
-// function hslToHex(h: number, s: number, l: number): string {
-//   s /= 100;
-//   l /= 100;
-//   const k = (n: number) => (n + h / 30) % 12;
-//   const a = s * Math.min(l, 1 - l);
-//   const f = (n: number) =>
-//     Math.round(
-//       255 * (l - a * Math.max(-1, Math.min(Math.min(k(n) - 3, 9 - k(n)), 1)))
-//     );
-//   return `#${[f(0), f(8), f(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
-// }
-// function generateHexColor(index: number, maxIndex: number): string {
-//   const hue = Math.floor((360 * index) / maxIndex); // 0 ~ 359
-//   return hslToHex(hue, 70, 60); // 고정된 채도/명도에서 색상만 변화
-// }
-// export function generatorColor(maxIndex: number = 1000) {
-//   const uuid = crypto.randomUUID(); // UUID 생성
-//   const index = uuidToIndex(uuid, maxIndex);
-//   const color = generateHexColor(index, maxIndex);
-//   return color;
-// }
-
-
 //구분 잘 가는 HEX 팔레트 (검은색 제외, 30개)
 const HEX_PALETTE = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
@@ -62,20 +30,24 @@ function getDistinctColorIndex(max: number): number {
   return ((idx * 37) % max); // 37은 200 이하에서 최대한 골고루 분포
 }
 
-export function generatorColor(idx: number, maxPeople: number = 1000): string {
+export function generatorColor(user_id: number, canvas_id: string, maxPeople: number = 1000): string {
+  // user_id와 canvas_id 조합을 해시해서 골고루 분산
+  const hash = crypto.createHash('md5').update(`${user_id}_${canvas_id}`).digest('hex');
+  const hashIndex = parseInt(hash.slice(0, 8), 16) % maxPeople;
+  
   // 1. HEX 팔레트 우선 배정
-  if (idx < HEX_PALETTE.length) {
-    return HEX_PALETTE[idx];
+  if (hashIndex < HEX_PALETTE.length) {
+    return HEX_PALETTE[hashIndex];
   }
   // 2. 부족하면 HSL 조합으로 생성 (검은색만 배제)
   const hues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
   const sats = [40, 60, 80, 100, 85];
   const lights = [35, 50, 65, 80, 90];
   const total = hues.length * sats.length * lights.length;
-  if (idx < HEX_PALETTE.length + total) {
-    const hIdx = Math.floor((idx - HEX_PALETTE.length) / (sats.length * lights.length)) % hues.length;
-    const sIdx = Math.floor((idx - HEX_PALETTE.length) / lights.length) % sats.length;
-    const lIdx = (idx - HEX_PALETTE.length) % lights.length;
+  if (hashIndex < HEX_PALETTE.length + total) {
+    const hIdx = Math.floor((hashIndex - HEX_PALETTE.length) / (sats.length * lights.length)) % hues.length;
+    const sIdx = Math.floor((hashIndex - HEX_PALETTE.length) / lights.length) % sats.length;
+    const lIdx = (hashIndex - HEX_PALETTE.length) % lights.length;
     const h = hues[hIdx];
     const s = sats[sIdx];
     const l = lights[lIdx];
@@ -84,15 +56,15 @@ export function generatorColor(idx: number, maxPeople: number = 1000): string {
     return color;
   }
   // 3. 1000명까지: 기존 색상에서 약간씩 변형 (중복 최소화)
-  // 기존 HSL 조합을 재활용하되, idx에 따라 H/S/L을 소폭 변화
-  const baseIdx = (idx - HEX_PALETTE.length - total) % total;
+  // 기존 HSL 조합을 재활용하되, hashIndex에 따라 H/S/L을 소폭 변화
+  const baseIdx = (hashIndex - HEX_PALETTE.length - total) % total;
   const hIdx = Math.floor(baseIdx / (sats.length * lights.length)) % hues.length;
   const sIdx = Math.floor(baseIdx / lights.length) % sats.length;
   const lIdx = baseIdx % lights.length;
-  // idx에 따라 약간의 변화(최대 10도, 5%, 5%)
-  const h = (hues[hIdx] + ((idx % 10) * 3)) % 360;
-  const s = Math.min(100, sats[sIdx] + (idx % 5));
-  const l = Math.min(95, lights[lIdx] + (idx % 5));
+  // hashIndex에 따라 약간의 변화(최대 10도, 5%, 5%)
+  const h = (hues[hIdx] + ((hashIndex % 10) * 3)) % 360;
+  const s = Math.min(100, sats[sIdx] + (hashIndex % 5));
+  const l = Math.min(95, lights[lIdx] + (hashIndex % 5));
   const color = hslToHex(h, s, l);
   if (color.toLowerCase() === '#000000') return '#ffffff';
   return color;
