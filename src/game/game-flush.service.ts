@@ -74,6 +74,28 @@ export class GameFlushService {
     console.log(`[GameFlushService] 유저 flush 시작: canvasId=${canvasId}, users=${userIds.length}명`);
     
     for (const userId of userIds) {
+      // 사용자 ID 유효성 검증
+      if (!userId || userId === '0' || isNaN(Number(userId))) {
+        console.warn(`[GameFlushService] 유효하지 않은 사용자 ID 감지: userId=${userId}, canvasId=${canvasId}`);
+        continue;
+      }
+      
+      // 사용자가 실제로 users 테이블에 존재하는지 확인
+      try {
+        const userExists = await this.dataSource.query(
+          'SELECT id FROM users WHERE id = $1',
+          [userId]
+        );
+        
+        if (userExists.length === 0) {
+          console.warn(`[GameFlushService] 존재하지 않는 사용자 ID 감지: userId=${userId}, canvasId=${canvasId}`);
+          continue;
+        }
+      } catch (error) {
+        console.error(`[GameFlushService] 사용자 존재 여부 확인 중 에러: userId=${userId}, canvasId=${canvasId}`, error);
+        continue;
+      }
+      
       // own_count, try_count, dead, life 등 Redis에서 조회
       const [ownCount, tryCount, dead, life] = await Promise.all([
         this.redis.hget(`game:${canvasId}:user:${userId}`, 'own_count'),

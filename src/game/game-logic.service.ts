@@ -298,6 +298,19 @@ export class GameLogicService {
   // game_user_result 테이블에 유저 정보 삽입
   private async insertUserToGameResult(canvasId: string, userId: string) {
     try {
+      // 기존 레코드가 있는지 확인
+      const existingResult = await this.dataSource.query(
+        'SELECT id FROM game_user_result WHERE user_id = $1 AND canvas_id = $2',
+        [userId, canvasId]
+      );
+
+      if (existingResult.length > 0) {
+        console.log(
+          `[GameLogicService] game_user_result 이미 존재: userId=${userId}, canvasId=${canvasId}`
+        );
+        return;
+      }
+
       const username = await this.getUserNameById(userId);
       let color = await this.gameStateService.getUserColor(canvasId, userId);
       // 색이 없으면 기본 색 생성
@@ -332,7 +345,15 @@ export class GameLogicService {
       const userData = await this.redis.get(sessionKey); // Redis에서 직접 조회
       if (!userData) return null;
       const user = JSON.parse(userData);
-      return String(user.id ?? user.userId);
+      const userId = String(user.id ?? user.userId);
+      
+      // 사용자 ID 유효성 검증
+      if (!userId || userId === '0') {
+        console.warn(`[GameLogicService] 유효하지 않은 사용자 ID 감지: userId=${userId}, socketId=${client.id}`);
+        return null;
+      }
+      
+      return userId;
     } catch {
       return null;
     }
