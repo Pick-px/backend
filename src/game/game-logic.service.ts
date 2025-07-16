@@ -80,9 +80,6 @@ export class GameLogicService {
       color: found?.color || '#000000',
     };
 
-    // game_user_result 보장 (없으면 생성)
-    await this.insertUserToGameResult(data.canvas_id, userId);
-
     // result 값만으로 분기
     await this.gameStateService.incrUserTryCount(data.canvas_id, userId);
     if (data.result) {
@@ -223,7 +220,7 @@ export class GameLogicService {
             `[GameLogicService] 랭킹 계산 및 결과 브로드캐스트 준비까지 소요: ${rankingEnd - rankingStart}ms`
           );
           // 게임 결과를 DB에 저장 (rank만 업데이트)
-          await this.updateGameResults(data.canvas_id, ranked);
+          await this.updateGameResultsByUserId(data.canvas_id, ranked);
           // 워커 큐에 canvas-history 잡 추가
           try {
             const { historyQueue } = await import('../queues/bullmq.queue');
@@ -282,9 +279,6 @@ export class GameLogicService {
       `[GameLogicService] 유저 초기화 완료: userId=${userId}, life=2`
     );
 
-    // game_user_result 테이블에 유저 정보 삽입
-    await this.insertUserToGameResult(canvasId, userId);
-
     // flush 루프 시작 (한 번만 시작되도록)
     const flushKey = `flush_started:${canvasId}`;
     const isFlushStarted = await this.redis.get(flushKey);
@@ -295,36 +289,6 @@ export class GameLogicService {
     }
   }
 
-  // game_user_result 테이블에 유저 정보 삽입
-  private async insertUserToGameResult(canvasId: string, userId: string) {
-    try {
-      const username = await this.getUserNameById(userId);
-      let color = await this.gameStateService.getUserColor(canvasId, userId);
-      // 색이 없으면 기본 색 생성
-      if (!color) {
-        const { generatorColor } = await import('../util/colorGenerator.util');
-        color = generatorColor(1000);
-        await this.gameStateService.setUserColor(canvasId, userId, color);
-        console.log(
-          `[GameLogicService] 기본 색 생성 및 저장: userId=${userId}, color=${color}`
-        );
-      }
-      await this.dataSource.query(
-        `INSERT INTO game_user_result (user_id, canvas_id, assigned_color, life, created_at)
-         VALUES ($1, $2, $3, $4, NOW())`,
-        [userId, canvasId, color, 2]
-      );
-      console.log(
-        `[GameLogicService] game_user_result 삽입 완료: userId=${userId}, username=${username}, color=${color}`
-      );
-    } catch (error) {
-      console.error(
-        `[GameLogicService] game_user_result 삽입 실패: userId=${userId}, canvasId=${canvasId}, 에러:`,
-        error
-      );
-    }
-  }
-
   // 유저 id 추출 (canvas.gateway와 동일하게 구현)
   private async getUserIdFromClient(client: Socket): Promise<string | null> {
     try {
@@ -332,7 +296,15 @@ export class GameLogicService {
       const userData = await this.redis.get(sessionKey); // Redis에서 직접 조회
       if (!userData) return null;
       const user = JSON.parse(userData);
-      return String(user.id ?? user.userId);
+      const userId = String(user.id ?? user.userId);
+      
+      // 사용자 ID 유효성 검증
+      if (!userId || userId === '0') {
+        console.warn(`[GameLogicService] 유효하지 않은 사용자 ID 감지: userId=${userId}, socketId=${client.id}`);
+        return null;
+      }
+      
+      return userId;
     } catch {
       return null;
     }
@@ -373,94 +345,6 @@ export class GameLogicService {
       return null;
     } catch {
       return null;
-    }
-  }
-
-  // 게임 결과를 DB에 저장 (rank만 업데이트)
-  private async updateGameResults(canvasId: string, results: any[]) {
-    try {
-      console.log(
-        `[GameLogicService] DB에 랭킹 업데이트 시작: canvasId=${canvasId}, 결과 수=${results.length}`
-      );
-
-      // 모든 유저의 userId를 한 번에 조회
-      const allUserIds =
-        await this.gameStateService.getAllUsersInGame(canvasId);
-      const usernameToUserIdMap = new Map<string, string>();
-
-      // username -> userId 매핑 생성
-      for (const userId of allUserIds) {
-        const username = await this.getUserNameById(userId);
-        usernameToUserIdMap.set(username, userId);
-      }
-
-      // 배치 업데이트를 위한 쿼리 준비
-      const updatePromises = results.map(async (result) => {
-        const userId = usernameToUserIdMap.get(result.username);
-        if (!userId) {
-          console.warn(
-            `[GameLogicService] userId를 찾을 수 없음: username=${result.username}`
-          );
-          return;
-        }
-
-        // game_user_result 테이블에 rank 업데이트
-        await this.dataSource.query(
-          `UPDATE game_user_result SET rank = $1 WHERE user_id = $2 AND canvas_id = $3`,
-          [result.rank, userId, canvasId]
-        );
-
-        console.log(
-          `[GameLogicService] 랭킹 업데이트 완료: userId=${userId}, username=${result.username}, rank=${result.rank}`
-        );
-      });
-
-      // 모든 업데이트를 병렬로 실행
-      await Promise.all(updatePromises);
-
-      console.log(
-        `[GameLogicService] 모든 랭킹 업데이트 완료: canvasId=${canvasId}`
-      );
-    } catch (error) {
-      console.error(`[GameLogicService] 랭킹 업데이트 실패:`, error);
-    }
-  }
-
-  // canvas_history 생성
-  private async createCanvasHistory(canvasId: string) {
-    try {
-      console.log(
-        `[GameLogicService] canvas_history 생성 시작: canvasId=${canvasId}`
-      );
-
-      // 기존 canvas_history가 있는지 확인
-      const existingHistory = await this.dataSource.query(
-        'SELECT id FROM canvas_history WHERE canvas_id = $1',
-        [canvasId]
-      );
-
-      if (existingHistory.length > 0) {
-        console.log(
-          `[GameLogicService] canvas_history 이미 존재: canvasId=${canvasId}`
-        );
-        return;
-      }
-
-      // canvas_history 생성
-      await this.dataSource.query(
-        `INSERT INTO canvas_history (canvas_id, created_at)
-         VALUES ($1, NOW())`,
-        [canvasId]
-      );
-
-      console.log(
-        `[GameLogicService] canvas_history 생성 완료: canvasId=${canvasId}`
-      );
-    } catch (error) {
-      console.error(
-        `[GameLogicService] canvas_history 생성 실패: canvasId=${canvasId}`,
-        error
-      );
     }
   }
 
