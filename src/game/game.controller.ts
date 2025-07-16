@@ -10,7 +10,6 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { WaitingResponseDto, QuestionDto } from './dto/waitingResponse.dto';
 import { GameService } from './game.service';
-import { generatorColor } from '../util/colorGenerator.util';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AuthRequest } from '../interface/AuthRequest.interface';
 import { UploadQuestionDto } from './dto/uploadQuestion.dto';
@@ -39,19 +38,16 @@ export class GameController {
     try {
       const user_id = req.user?._id;
       console.log(`[GameController] 유저 정보: userId=${user_id}`);
-      
-      // 1. 현재 캔버스에 참가한 모든 유저 목록 조회
-      const allUsers = await this.gameStateService.getAllUsersInGame(canvasId);
-      // 2. 유저 인덱스(idx)와 전체 인원(maxPeople) 계산
-      const idx = allUsers.findIndex((id) => String(id) === String(user_id));
-      const maxPeople = 1000;
-      // 3. 중복 없는 색상 배정
-      const color = generatorColor(idx >= 0 ? idx : allUsers.length, maxPeople);
-      console.log(`[GameController] 색 생성: idx=${idx}, color=${color}`);
 
       const questions: QuestionDto[] = await this.gameService.getQuestions();
       console.log(
         `[GameController] 문제 조회: questions=${questions.length}개`
+      );
+
+      // setGameReady에서 색상 생성 및 반환
+      const color = await this.gameService.setGameReady(user_id, canvasId, questions);
+      console.log(
+        `[GameController] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}, color=${color}`
       );
 
       const data = await this.gameService.getData(canvasId, color, questions);
@@ -60,11 +56,6 @@ export class GameController {
       );
 
       console.log('waiting room data: ', data);
-
-      await this.gameService.setGameReady(color, user_id, canvasId, questions);
-      console.log(
-        `[GameController] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}`
-      );
 
       try {
         const resposne = new WaitingResponseDto();

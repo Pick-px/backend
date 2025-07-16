@@ -227,13 +227,8 @@ export class CanvasGateway implements OnGatewayInit {
       // 게임 캔버스: 유저 상태 초기화 (life=2, try_count=0, own_count=0, dead=false)
       await this.gameLogicService.initializeUserForGame(data.canvas_id, String(userId));
       
-      // 색 배정 (중복 방지)
-      const existingColor = await this.gameStateService.getUserColor(data.canvas_id, String(userId));
-      if (!existingColor) {
-        const color = await this.assignUniqueColor(data.canvas_id, String(userId));
-        await this.gameStateService.setUserColor(data.canvas_id, String(userId), color);
-        console.log(`[CanvasGateway] 유저 ${userId}에게 색 ${color} 배정 완료`);
-      }
+      // 색 배정은 GameService.setGameReady()에서 처리하므로 여기서는 제거
+      console.log(`[CanvasGateway] 게임 유저 초기화 완료: userId=${userId}`);
     }
 
     // 쿨다운 정보 자동 푸시
@@ -249,29 +244,6 @@ export class CanvasGateway implements OnGatewayInit {
         console.log(error);
       }
     }
-  }
-
-  // 중복되지 않는 색 배정
-  private async assignUniqueColor(canvasId: string, userId: string): Promise<string> {
-    const { generatorColor } = await import('../util/colorGenerator.util');
-    const maxColors = 1000;
-    // 1. 이미 사용 중인 색상 집합
-    const allUsers = await this.gameStateService.getAllUsersInGame(canvasId);
-    const usedColors = new Set<string>();
-    for (const uid of allUsers) {
-      if (uid === userId) continue;
-      const userColor = await this.gameStateService.getUserColor(canvasId, uid);
-      if (userColor) usedColors.add(userColor);
-    }
-    // 2. 미사용 색상 인덱스 리스트
-    for (let i = 0; i < maxColors; i++) {
-      const color = generatorColor(i, maxColors);
-      if (!usedColors.has(color)) {
-        return color;
-      }
-    }
-    // 3. 모든 색상이 다 쓰였으면 fallback
-    return '#ffffff';
   }
 
   // 픽셀 그리기 요청
