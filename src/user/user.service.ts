@@ -11,6 +11,7 @@ import { AuthService } from 'src/auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import Redis from 'ioredis';
 import { JwtPayload } from '../interface/JwtPaylod.interface';
+import { v4 as uuidv4 } from 'uuid';
 
 interface CommonTokenResponse {
   access_token: string;
@@ -249,5 +250,35 @@ export class UserService {
     } catch (err) {
       throw new NotFoundException('로그아웃 실패: 레디스에서 토큰 삭제 실패');
     }
+  }
+
+  async guestSignUp(userName: string) {
+    // uuid로 이메일 생성
+    const uuid = uuidv4();
+    const email = `${uuid}@guest.local`;
+    // 이메일 중복 체크
+    const exist = await this.userRepository.findOne({ where: { email } });
+    if (exist) {
+      throw new Error('이미 존재하는 이메일입니다.');
+    }
+    const now = new Date();
+    const newUser = this.userRepository.create({
+      email: email,
+      password: null,
+      createdAt: now,
+      updatedAt: now,
+      userName: userName,
+    });
+    const saved: User = await this.userRepository.save(newUser);
+    const token = await this.authService.generateJWT(saved.id, saved.userName);
+    return {
+      isSuccess: true,
+      code: '200',
+      message: '요청에 성공하였습니다.',
+      createdAt: now.toISOString(),
+      data: 'Join Success',
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+    };
   }
 }

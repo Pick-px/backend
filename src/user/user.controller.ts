@@ -25,6 +25,7 @@ import { OAuthCallbackDto } from './dto/oauth_callback_dto.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.guard';
 import { AuthRequest } from 'src/interface/AuthRequest.interface';
 import { SignedCookies } from 'src/interface/SignedCookies.interface';
+import { CreateGuestDto } from './dto/create-guest.dto';
 
 @ApiTags('api/user')
 @Controller('api/user')
@@ -72,6 +73,13 @@ export class UserController {
       if (err instanceof HttpException) throw err;
       throw new NotFoundException('OAuth 실패');
     }
+  }
+
+  @Post('signup')
+  @ApiOperation({ summary: '게스트 회원가입(로그인) API' })
+  async guestSignUp(@Body() createGuestDto: CreateGuestDto) {
+    const result = await this.userService.guestSignUp(createGuestDto.userName);
+    return result;
   }
 
   @Get('info')
