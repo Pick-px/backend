@@ -77,9 +77,23 @@ export class UserController {
 
   @Post('signup')
   @ApiOperation({ summary: '게스트 회원가입(로그인) API' })
-  async guestSignUp(@Body() createGuestDto: CreateGuestDto) {
+  async guestSignUp(
+    @Body() createGuestDto: CreateGuestDto,
+    @Res({ passthrough: true }) res: Response
+  ) {
     const result = await this.userService.guestSignUp(createGuestDto.userName);
-    return result;
+    // access_token을 헤더로, refresh_token을 쿠키로 내려줌 (OAuth와 동일)
+    res.setHeader('Authorization', `Bearer ${result.access_token}`);
+    res.cookie('refresh_token', result.refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 1 * 24 * 60 * 60 * 1000, // 1일
+      signed: true,
+    });
+    // 응답 바디에는 토큰 정보 포함하지 않고, 나머지 정보만 반환
+    const { access_token, refresh_token, ...rest } = result;
+    return rest;
   }
 
   @Get('info')
