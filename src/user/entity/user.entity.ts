@@ -14,8 +14,8 @@ export class User {
   @Column({ name: 'email', unique: true, nullable: false })
   email: string;
 
-  @Column({ name: 'password', nullable: true })
-  password: string;
+  @Column({ name: 'password', nullable: true, type: 'varchar', length: 100 })
+  password: string | null;
 
   @Column({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

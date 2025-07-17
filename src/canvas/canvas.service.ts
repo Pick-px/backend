@@ -420,8 +420,8 @@ export class CanvasService {
   }): Promise<DrawPixelResponse> {
     // 캔버스 타입 조회
     const canvasType = await this.getCanvasType(canvas_id);
-    // 게임 모드면 쿨다운 1초, 그 외는 10초
-    const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 10;
+    // 게임 모드면 쿨다운 1초, 그 외는 3초
+    const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 3;
     console.log(
       `[CanvasService] 쿨다운 설정: canvasType=${canvasType}, cooldownSeconds=${cooldownSeconds}`
     );
