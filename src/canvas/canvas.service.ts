@@ -205,7 +205,7 @@ export class CanvasService {
           `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
            from canvases 
            where (ended_at IS NULL OR ended_at > NOW())
-           and (type like "event%" or type like "public")`,
+           and (type like 'event%' or type = 'public')`,
           []
         );
         return result;
@@ -215,7 +215,7 @@ export class CanvasService {
           `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
            from canvases 
            where ended_at IS NOT NULL AND ended_at <= NOW()
-           and (type like "event%" or type like "public")`,
+           and (type like 'event%' or type = 'public')`,
           []
         );
         return result;
@@ -230,7 +230,7 @@ export class CanvasService {
       const games: CanvasInfo[] = await this.dataSource.query(
         `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y
         from canvases
-        where (ended_at < NOW()) and type like "game%"`
+        where (ended_at < NOW()) and type like 'game%'`
       );
       return games;
     } catch (err) {
