@@ -4,10 +4,6 @@ import { IsNumber, IsString, IsArray } from 'class-validator';
 export class UploadQuestionDto {
   @ApiProperty()
   @IsString()
-  id: string;
-
-  @ApiProperty()
-  @IsString()
   question: string;
 
   @ApiProperty()
