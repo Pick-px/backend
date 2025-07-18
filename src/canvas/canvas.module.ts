@@ -16,6 +16,7 @@ import { PixelModule } from '../pixel/pixel.module';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
 import { CanvasHistoryService } from './canvas-history.service';
 import { GalleryController } from './gallery.controller';
+import { AdminCanvasController } from '../canvas/admin-canvas.controller';
 import { UserModule } from '../user/user.module';
 import { GameModule } from '../game/game.module';
 import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
@@ -46,7 +47,7 @@ import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
     forwardRef(() => GameModule), // GameModule 추가
     AwsModule, // AwsModule 추가
   ],
-  controllers: [CanvasController, GalleryController],
+  controllers: [CanvasController, GalleryController, AdminCanvasController],
   providers: [
     CanvasService,
     CanvasGateway,

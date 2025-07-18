@@ -26,6 +26,13 @@ interface JobData {
   endedAt?: Date;
 }
 
+async function getCanvasById(canvas_id: number): Promise<any> {
+  // Nest DI 없이 간단히 DB 조회 (AppDataSource 사용)
+  const { AppDataSource } = await import('../data-source');
+  const canvasRepo = AppDataSource.getRepository('Canvas');
+  return await canvasRepo.findOne({ where: { id: canvas_id } });
+}
+
 const alarmWorker = new Worker(
   'canvas-alarm',
   async (job: Job) => {
@@ -47,8 +54,18 @@ const alarmWorker = new Worker(
   { connection: redisConnection }
 );
 
-function handleThirtySecBeforeStart(data: JobData, io: Server) {
+async function handleThirtySecBeforeStart(data: JobData, io: Server) {
   const { canvas_id, title, startedAt } = data;
+  // 캔버스 상태 체크
+  const canvas = await getCanvasById(canvas_id);
+  if (!canvas) {
+    console.log(`[alarm.worker] 30초전 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    return;
+  }
+  if (canvas.startedAt && new Date() > new Date(canvas.startedAt)) {
+    // 이미 시작된 경우
+    return;
+  }
   console.log('30초 전 알람 실행');
   io.emit('canvas_open_alarm', {
     canvas_id: canvas_id,
@@ -60,10 +77,19 @@ function handleThirtySecBeforeStart(data: JobData, io: Server) {
   console.log('30초 전 알람 발송');
 }
 
-function handleThreeSecBeforeEnd(data: JobData, io: Server) {
+async function handleThreeSecBeforeEnd(data: JobData, io: Server) {
   const { canvas_id, title, endedAt } = data;
   const id = `canvas_${canvas_id}`;
-
+  // 캔버스 상태 체크
+  const canvas = await getCanvasById(canvas_id);
+  if (!canvas) {
+    console.log(`[alarm.worker] 3초전 종료 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    return;
+  }
+  if (canvas.endedAt && new Date() > new Date(canvas.endedAt)) {
+    // 이미 종료된 경우
+    return;
+  }
   console.log('끝나기 3초전 알람 발행');
   io.to(id).emit('canvas_close_alarm', {
     canvas_id: canvas_id,
@@ -75,10 +101,19 @@ function handleThreeSecBeforeEnd(data: JobData, io: Server) {
   console.log('끝나기 3초전 알람 발송');
 }
 
-function handleThreeSecBeforeStart(data: JobData, io: Server) {
+async function handleThreeSecBeforeStart(data: JobData, io: Server) {
   const { canvas_id, title, startedAt } = data;
   const id = `canvas_${canvas_id}`;
-
+  // 캔버스 상태 체크
+  const canvas = await getCanvasById(canvas_id);
+  if (!canvas) {
+    console.log(`[alarm.worker] 3초전 시작 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    return;
+  }
+  if (canvas.startedAt && new Date() > new Date(canvas.startedAt)) {
+    // 이미 시작된 경우
+    return;
+  }
   console.log('시작 3초전 알람 발행');
   io.to(id).emit('canvas_open_alarm', {
     canvas_id: canvas_id,
