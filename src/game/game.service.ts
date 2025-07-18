@@ -189,4 +189,8 @@ export class GameService {
       );
     }
   }
+
+  async getGameList() {
+    return await this.canvasService.getGameList();
+  }
 }

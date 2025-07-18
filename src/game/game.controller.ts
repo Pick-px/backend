@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AuthRequest } from '../interface/AuthRequest.interface';
 import { UploadQuestionDto } from './dto/uploadQuestion.dto';
 import { GameStateService } from './game-state.service';
+import { CanvasInfo } from '../interface/CanvasInfo.interface';
 
 interface UploadRequet {
   questions: UploadQuestionDto[];
@@ -90,6 +91,17 @@ export class GameController {
     } catch (err) {
       console.error(`[GameController] 문제 업로드 실패:`, err);
       return { success: false };
+    }
+  }
+
+  @Get('list')
+  async getGameList() {
+    try {
+      const games: CanvasInfo[] = await this.gameService.getGameList();
+      return games;
+    } catch (err) {
+      console.error('Error 발생 : ', err);
+      throw err;
     }
   }
 }
