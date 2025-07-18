@@ -24,7 +24,7 @@ interface UploadRequet {
 export class GameController {
   constructor(
     private readonly gameService: GameService,
-    private readonly gameStateService: GameStateService,
+    private readonly gameStateService: GameStateService
   ) {}
 
   @Get('waitingroom')
@@ -45,7 +45,11 @@ export class GameController {
       );
 
       // setGameReady에서 색상 생성 및 반환
-      const color = await this.gameService.setGameReady(user_id, canvasId, questions);
+      const color = await this.gameService.setGameReady(
+        user_id,
+        canvasId,
+        questions
+      );
       console.log(
         `[GameController] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}, color=${color}`
       );

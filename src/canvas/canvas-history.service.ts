@@ -28,7 +28,6 @@ export class CanvasHistoryService {
   /**
    * 캔버스 종료 시 히스토리 데이터 생성
    * 최적화된 단순 쿼리로 처리
-   * 동점자 처리: joined_at 빠른 순, user_id 작은 순
    */
   async createCanvasHistory(canvasId: number): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -52,27 +51,29 @@ export class CanvasHistoryService {
       `;
       const basicStats = await queryRunner.query(basicStatsQuery, [canvasId]);
 
-      // 3. top_try_user 조회 (인덱스 활용)
+      // 3. top_try_user 조회 (인덱스 활용, 동점자: own_count, user_id 순)
       const topTryUserQuery = `
-        SELECT uc.user_id, uc.try_count
+        SELECT 
+          uc.user_id, 
+          uc.try_count,
+          COALESCE((SELECT COUNT(*) FROM pixels p WHERE p.owner = uc.user_id AND p.canvas_id = uc.canvas_id), 0) as own_count
         FROM user_canvas uc
         WHERE uc.canvas_id = $1 AND uc.try_count > 0
-        ORDER BY uc.try_count DESC, uc.joined_at ASC, uc.user_id ASC
+        ORDER BY uc.try_count DESC, own_count DESC, uc.user_id ASC
         LIMIT 1
       `;
       const topTryUser = await queryRunner.query(topTryUserQuery, [canvasId]);
 
-      // 4. top_own_user 조회 (인덱스 활용)
+      // 4. top_own_user 조회 (인덱스 활용, 동점자: try_count, user_id 순)
       const topOwnUserQuery = `
         SELECT 
           p.owner as user_id,
-          COUNT(*) as own_count
+          COUNT(*) as own_count,
+          COALESCE((SELECT try_count FROM user_canvas WHERE user_id = p.owner AND canvas_id = $1), 0) as try_count
         FROM pixels p
         WHERE p.canvas_id = $1 AND p.owner IS NOT NULL
         GROUP BY p.owner
-        ORDER BY COUNT(*) DESC, 
-                 (SELECT joined_at FROM user_canvas WHERE user_id = p.owner AND canvas_id = $1) ASC,
-                 p.owner ASC
+        ORDER BY COUNT(*) DESC, try_count DESC, p.owner ASC
         LIMIT 1
       `;
       const topOwnUser = await queryRunner.query(topOwnUserQuery, [canvasId]);

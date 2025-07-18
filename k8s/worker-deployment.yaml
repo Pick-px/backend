@@ -20,24 +20,60 @@ spec:
         app: nestjs-worker
         component: worker
     spec:
+      # 파드 종료 시 유예 기간 증가
+      terminationGracePeriodSeconds: 120
       containers:
         - name: nestjs-worker
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest
-          command: ["node", "dist/queues/bullmq.worker.js"]
+          command: ['node', 'dist/queues/bullmq.worker.js']
           # 리소스 제한
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "250m"
+              memory: '4Gi'
+              cpu: '2000m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
-          # Graceful shutdown (Worker 프로세스용)
+              memory: '8Gi'
+              cpu: '4000m'
+          # Startup Probe 추가
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f 'node.*worker' > /dev/null"
+            failureThreshold: 30
+            periodSeconds: 10
+          # Readiness Probe 추가
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f 'node.*worker' > /dev/null"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Liveness Probe
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f 'node.*worker' > /dev/null"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Graceful shutdown
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 15"]
+                command: ['/bin/sh', '-c', 'sleep 15']
           env:
+            # Node.js 메모리 제한 설정
+            - name: NODE_OPTIONS
+              value: '--max-old-space-size=8192'
             - name: NODE_ENV
               value: 'production'
             # JWT Secret
@@ -119,11 +155,6 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: google-redirect-uri
-            - name: REDIS_TLS
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: redis-tls
             - name: AWS_S3_BUCKET
               valueFrom:
                 secretKeyRef:
@@ -144,23 +175,17 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: aws-region
-          resources:
-            requests:
-              memory: '256Mi'
-              cpu: '200m'
-            limits:
-              memory: '512Mi'
-              cpu: '400m'
-          # Worker 프로세스 상태 확인을 위한 간단한 probe
-          livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "pgrep -f 'node.*worker' > /dev/null"
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
       restartPolicy: Always
-      terminationGracePeriodSeconds: 60
+---
+# Pod Disruption Budget 추가
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nestjs-worker-pdb
+  namespace: nestjs-app
+spec:
+  minAvailable: 1 # 항상 최소 1개의 pod가 사용 가능하도록 보장
+  selector:
+    matchLabels:
+      app: nestjs-worker
+      component: worker
