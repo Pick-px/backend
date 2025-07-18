@@ -116,10 +116,11 @@ export class UserService {
         createdAt: new Date(),
         updatedAt: new Date(),
         userName: userInfo.userName,
+        role: 'user',
       });
       try {
         const result = await this.userRepository.save(newUser);
-        const token = this.authService.generateJWT(result.id, result.userName);
+        const token = this.authService.generateJWT(result.id, result.userName, result.role);
         return token;
       } catch (err) {
         const existUser = await this.userRepository.findOne({
@@ -128,10 +129,10 @@ export class UserService {
 
         if (!existUser) throw new Error('동시성 문제 발생!');
 
-        return this.authService.generateJWT(existUser.id, existUser.userName);
+        return this.authService.generateJWT(existUser.id, existUser.userName, existUser.role);
       }
     } else {
-      return this.authService.generateJWT(user.id, user.userName);
+      return this.authService.generateJWT(user.id, user.userName, user.role);
     }
   }
 
@@ -268,9 +269,10 @@ export class UserService {
       createdAt: now,
       updatedAt: now,
       userName: userName,
+      role: 'guest',
     });
     const saved: User = await this.userRepository.save(newUser);
-    const token = await this.authService.generateJWT(saved.id, saved.userName);
+    const token = await this.authService.generateJWT(saved.id, saved.userName, saved.role);
     return {
       isSuccess: true,
       code: '200',

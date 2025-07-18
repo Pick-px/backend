@@ -26,6 +26,9 @@ export class User {
   @Column({ name: 'user_name' })
   userName: string;
 
+  @Column({ name: 'role', type: 'varchar', length: 10, default: 'user' })
+  role: 'admin' | 'user' | 'guest';
+
   @OneToMany(() => UserCanvas, (uc) => uc.user)
   userCanvases: UserCanvas[];
 
