@@ -7,7 +7,6 @@ import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
 import './history.worker';
-import { QueryRunner } from 'typeorm';
 
 config();
 
@@ -68,9 +67,6 @@ async function addChatToBatch(groupId: number, chatData: any) {
 
   // 배치 크기 도달 시 즉시 flush
   if (chatBatchQueue.length >= CHAT_BATCH_SIZE) {
-    // console.log(
-    //   `[Worker] 채팅 배치 크기 도달으로 즉시 flush: 개수=${chatBatchQueue.length}`
-    // );
     await flushChatBatch();
   }
 }
@@ -104,16 +100,19 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
             : Number(owner),
       });
     }
+
     pixelBatchQueue.clear();
-    let queryRunner: QueryRunner;
+
+    // let queryRunner: QueryRunner;
     for (const [canvasId, pixels] of canvasGroups) {
       // chunk 단위로 나눠서 처리
       for (let i = 0; i < pixels.length; i += CHUNK_SIZE) {
-        queryRunner = AppDataSource.createQueryRunner();
+        const queryRunner = AppDataSource.createQueryRunner();
+        let chunk: PixelInfo[] = []; // 바깥에서 선언
         try {
           await queryRunner.connect();
           await queryRunner.startTransaction();
-          const chunk = pixels.slice(i, i + CHUNK_SIZE);
+          chunk = pixels.slice(i, i + CHUNK_SIZE);
 
           const whereClauseParts: string[] = [];
           const caseClauseParts: string[] = [];
@@ -179,9 +178,15 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
 
           await queryRunner.query(query, values);
           await queryRunner.commitTransaction();
-        } catch (error) {
+        } catch (err) {
+          console.error(err);
           await queryRunner.rollbackTransaction();
-          throw error;
+          for (const pixel of chunk) {
+            pixelBatchQueue.add(
+              `${canvasId}:${pixel.x}:${pixel.y}:${pixel.color}:${pixel.owner ?? ''}`
+            );
+          }
+          continue;
         } finally {
           await queryRunner.release();
         }
@@ -189,9 +194,6 @@ async function flushPixelBatch(isForceFlush: boolean = false) {
     }
 
     const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
-    // console.log(
-    //   `[Worker] 픽셀 ${flushType} 완료: 총개수=${pixelBatchQueue.size}`
-    // );
     // pixelBatchQueue.clear();
 
     // 픽셀 플러시 후 dirty_pixels set 비우기
@@ -221,10 +223,6 @@ async function flushChatBatch(isForceFlush: boolean = false) {
 
     await chatRepo.save(chatsToInsert);
     const flushType = isForceFlush ? '강제 flush' : '즉시 flush';
-    // console.log(
-    //   `[Worker] 채팅 ${flushType} 완료: 개수=${chatBatchQueue.length}`
-    // );
-
     // flush 후 각 그룹별로 Redis 동기화
     const groupIds = [...new Set(chatBatchQueue.map(({ groupId }) => groupId))];
     for (const groupId of groupIds) {
@@ -262,12 +260,6 @@ async function syncRedisChatAfterFlush(groupId: number) {
     await redis.ltrim(chatKey, 0, 49);
     await redis.expire(chatKey, 12 * 60 * 60);
   }
-  // console.log(
-  //   '[동기화] groupId',
-  //   groupId,
-  //   '레디스 채팅 개수',
-  //   chatPayloads.length
-  // );
 }
 
 // 주기적 강제 flush (안전장치)
@@ -284,12 +276,6 @@ const forceFlushInterval = setInterval(async () => {
     totalChatFlushCount = chatBatchQueue.length;
     await flushChatBatch(true);
   }
-
-  // if (totalPixelFlushCount > 0 || totalChatFlushCount > 0) {
-  //   console.log(
-  //     `[Worker] 강제 flush 완료: 픽셀=${totalPixelFlushCount}개, 채팅=${totalChatFlushCount}개`
-  //   );
-  // }
 }, BATCH_TIMEOUT_MS);
 
 // Redis 이벤트 리스너 설정

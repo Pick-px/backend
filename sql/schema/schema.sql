@@ -9,6 +9,7 @@ create table if not exists users
     created_at timestamp    not null,
     updated_at timestamp    not null,
     user_name  varchar(50)  not null,
+    role varchar(10) not null default 'user',
     primary key (id),
     unique (email)
 );
@@ -156,8 +157,8 @@ CREATE TABLE IF NOT EXISTS canvas_history (
 );
 
 -- 관리자 계정 seed (email=pickpx0617@gmail.com, user_name=gmg team)
-INSERT INTO users (email, password, created_at, updated_at, user_name)
-VALUES ('pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team')
+INSERT INTO users (email, password, created_at, updated_at, user_name, role)
+VALUES ('pickpx0617@gmail.com', NULL, '2025-06-17 00:00:00.000000', '2025-06-17 00:00:00.000000', 'gmg team', 'admin')
 ON CONFLICT (email) DO NOTHING; 
 
 -- 문제 은행
