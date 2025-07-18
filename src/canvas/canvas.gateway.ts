@@ -40,7 +40,7 @@ export class CanvasGateway implements OnGatewayInit {
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
     private readonly gameLogicService: GameLogicService, // 게임 특화 로직 주입
-    private readonly gameStateService: GameStateService, // 게임 상태 관리 주입
+    private readonly gameStateService: GameStateService // 게임 상태 관리 주입
   ) {}
 
   afterInit(server: Server) {
@@ -99,13 +99,15 @@ export class CanvasGateway implements OnGatewayInit {
       if (!userData) return null;
       const user = JSON.parse(userData) as SocketUser;
       const userId = typeof user.id === 'number' ? user.id : Number(user.id);
-      
+
       // 사용자 ID 유효성 검증
       if (!userId || userId <= 0) {
-        console.warn(`[CanvasGateway] 유효하지 않은 사용자 ID 감지: userId=${userId}, socketId=${client.id}`);
+        console.warn(
+          `[CanvasGateway] 유효하지 않은 사용자 ID 감지: userId=${userId}, socketId=${client.id}`
+        );
         return null;
       }
-      
+
       return userId;
     } catch (error) {
       console.error('[CanvasGateway] 사용자 세션 조회 중 에러:', error);
@@ -210,23 +212,32 @@ export class CanvasGateway implements OnGatewayInit {
     if (canvasType === 'game_calculation') {
       // 게임 캔버스는 접속 시부터 로그인 필수
       if (!userId) {
-        client.emit('auth_error', { message: '게임 모드는 로그인 후 접속 가능합니다.' });
-        console.log(`[CanvasGateway] 비로그인 유저의 게임 캔버스 접근 차단: socketId=${client.id}, canvasId=${canvasId}`);
+        client.emit('auth_error', {
+          message: '게임 모드는 로그인 후 접속 가능합니다.',
+        });
+        console.log(
+          `[CanvasGateway] 비로그인 유저의 게임 캔버스 접근 차단: socketId=${client.id}, canvasId=${canvasId}`
+        );
         return;
       }
-      
+
       // 캔버스 종료 상태 체크
       const canvasInfo = await this.canvasService.getCanvasById(data.canvas_id);
       const now = new Date();
       if (canvasInfo?.metaData?.endedAt && now > canvasInfo.metaData.endedAt) {
         // 이미 종료된 캔버스라면 결과 브로드캐스트 트리거
         await this.gameLogicService.forceGameEnd(data.canvas_id, this.server);
-        client.emit('game_error', { message: '게임이 이미 종료되었습니다. 결과를 확인하세요.' });
+        client.emit('game_error', {
+          message: '게임이 이미 종료되었습니다. 결과를 확인하세요.',
+        });
         return;
       }
       // 게임 캔버스: 유저 상태 초기화 (life=2, try_count=0, own_count=0, dead=false)
-      await this.gameLogicService.initializeUserForGame(data.canvas_id, String(userId));
-      
+      await this.gameLogicService.initializeUserForGame(
+        data.canvas_id,
+        String(userId)
+      );
+
       // 색 배정은 GameService.setGameReady()에서 처리하므로 여기서는 제거
       console.log(`[CanvasGateway] 게임 유저 초기화 완료: userId=${userId}`);
     }
@@ -304,7 +315,14 @@ export class CanvasGateway implements OnGatewayInit {
 
   @SubscribeMessage('send_result')
   async handleSendResult(
-    @MessageBody() data: { canvas_id: string; x: number; y: number; color: string; result: boolean },
+    @MessageBody()
+    data: {
+      canvas_id: string;
+      x: number;
+      y: number;
+      color: string;
+      result: boolean;
+    },
     @ConnectedSocket() client: Socket
   ) {
     console.log('[CanvasGateway] send_result 이벤트 진입', data);

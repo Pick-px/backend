@@ -162,7 +162,7 @@ ON CONFLICT (email) DO NOTHING;
 
 -- 문제 은행
 CREATE TABLE IF NOT EXISTS questions (
-    id bigint PRIMARY KEY,
+    id bigserial PRIMARY KEY,
     question TEXT NOT NULL,
     options TEXT[] NOT NULL,
     answer INTEGER NOT NULL
