@@ -239,6 +239,7 @@ export class CanvasService {
       const games: CanvasInfo[] = await this.dataSource.query(
         `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y
         from canvases
+
         where (started_at > NOW()) and type = 'game%'`
       );
       return games;
