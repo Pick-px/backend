@@ -31,7 +31,7 @@ export class GameService {
 
   async getQuestions(): Promise<QuestionDto[]> {
     const questions: QuestionDto[] = await this.dataSource.query(
-      'select id, question, options, answer from questions order by RANDOM()'
+      'select id, question, options, answer from questions order by RANDOM() limit 100'
     );
     return questions;
   }
@@ -70,31 +70,44 @@ export class GameService {
     console.log(
       `[GameService] 게임 준비 시작: userId=${user_id}, canvasId=${canvasId}, questions=${questions.length}개`
     );
-    
+
     // 1. Redis에서 기존 색상 확인
-    let color = await this.gameStateService.getUserColor(canvasId, String(user_id));
-    
+    let color = await this.gameStateService.getUserColor(
+      canvasId,
+      String(user_id)
+    );
+
     if (!color) {
       // 2. Redis에 없으면 DB에서 확인
       const existingResult = await this.dataSource.query(
         'SELECT assigned_color FROM game_user_result WHERE user_id = $1 AND canvas_id = $2',
         [user_id, canvasId]
       );
-      
+
       if (existingResult.length > 0) {
         // 3. DB에 있으면 Redis에 캐싱
         color = existingResult[0].assigned_color;
-        await this.gameStateService.setUserColor(canvasId, String(user_id), color);
-        console.log(`[GameService] DB 색상 Redis 캐싱: userId=${user_id}, color=${color}`);
+        await this.gameStateService.setUserColor(
+          canvasId,
+          String(user_id),
+          color
+        );
+        console.log(
+          `[GameService] DB 색상 Redis 캐싱: userId=${user_id}, color=${color}`
+        );
       } else {
         // 4. DB에도 없으면 새로 생성
         color = generatorColor(user_id, canvasId, 1000);
-        console.log(`[GameService] 새 색상 생성: userId=${user_id}, color=${color}`);
+        console.log(
+          `[GameService] 새 색상 생성: userId=${user_id}, color=${color}`
+        );
       }
     } else {
-      console.log(`[GameService] Redis 색상 사용: userId=${user_id}, color=${color}`);
+      console.log(
+        `[GameService] Redis 색상 사용: userId=${user_id}, color=${color}`
+      );
     }
-    
+
     try {
       await this.dataSource.transaction(async (manager) => {
         // 기존 game_user_result가 있는지 확인
@@ -160,7 +173,6 @@ export class GameService {
         .into(Question)
         .values(
           questions.map((question) => ({
-            id: Number(question.id),
             question: question.question,
             options: question.options,
             answer: question.answer,
