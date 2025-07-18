@@ -44,7 +44,6 @@ export class CanvasGateway implements OnGatewayInit {
   ) {}
 
   afterInit(server: Server) {
-    console.log('[CanvasGateway] afterInit 메서드 호출됨');
     setSocketServer(this.server);
     // AppGateway 초기화 완료 대기
     setTimeout(() => {
@@ -57,28 +56,16 @@ export class CanvasGateway implements OnGatewayInit {
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
 
-    console.log('[CanvasGateway] Redis 상태 확인 중...', pubClient.status);
-    console.log('[CanvasGateway] Redis 객체 타입:', typeof pubClient);
-    console.log('[CanvasGateway] Redis 연결 상태:', pubClient.status);
-
     // Redis Adapter 설정 전 연결 상태 확인
     if (pubClient.status === 'ready') {
-      console.log('[CanvasGateway] Redis 연결 준비됨, Adapter 설정 시작');
       this.setupRedisAdapter(server, pubClient, subClient);
     } else {
-      console.log(
-        '[CanvasGateway] Redis 연결 대기 중... 현재 상태:',
-        pubClient.status
-      );
       pubClient.on('ready', () => {
-        console.log('[CanvasGateway] Redis 연결 준비됨, Adapter 설정 시작');
         this.setupRedisAdapter(server, pubClient, subClient);
       });
 
       // 연결 실패 시 대비
-      pubClient.on('error', (error) => {
-        console.error('[CanvasGateway] Redis 연결 에러:', error);
-      });
+      pubClient.on('error', (error) => {});
     }
   }
 
@@ -88,7 +75,6 @@ export class CanvasGateway implements OnGatewayInit {
     subClient: Redis
   ) {
     server.adapter(createAdapter(pubClient, subClient));
-    console.log('[CanvasGateway] Redis Adapter 설정 완료');
   }
 
   // Redis 세션에서 사용자 id만 가져오기 (owner 용)
@@ -149,9 +135,6 @@ export class CanvasGateway implements OnGatewayInit {
           userId,
         });
       if (!result.success) {
-        console.log(
-          `[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}`
-        );
         client.emit('pixel_error', {
           message: result.message,
         });
@@ -178,10 +161,6 @@ export class CanvasGateway implements OnGatewayInit {
           color: pixel.color,
         });
       });
-
-      console.log(
-        `[Gateway] 픽셀 그리기 완료: canvas=${pixel.canvas_id}, 위치=(${pixel.x},${pixel.y}), 색상=${pixel.color}`
-      );
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
       client.emit('pixel_error', { message: '픽셀 그리기 실패' });
@@ -203,10 +182,6 @@ export class CanvasGateway implements OnGatewayInit {
     await this.redis.sadd(canvasSocketKey, client.id);
     await this.redis.expire(canvasSocketKey, 600); // 10분 TTL
 
-    console.log(
-      `[CanvasGateway] 소켓 ${client.id}가 캔버스 ${canvasId}에 참여함 (로그인: ${userId ? '예' : '아니오'})`
-    );
-
     // 게임 캔버스인 경우 유저 초기화 및 색 배정
     const canvasType = await this.canvasService.getCanvasType(data.canvas_id);
     if (canvasType === 'game_calculation') {
@@ -215,9 +190,6 @@ export class CanvasGateway implements OnGatewayInit {
         client.emit('auth_error', {
           message: '게임 모드는 로그인 후 접속 가능합니다.',
         });
-        console.log(
-          `[CanvasGateway] 비로그인 유저의 게임 캔버스 접근 차단: socketId=${client.id}, canvasId=${canvasId}`
-        );
         return;
       }
 
@@ -239,7 +211,6 @@ export class CanvasGateway implements OnGatewayInit {
       );
 
       // 색 배정은 GameService.setGameReady()에서 처리하므로 여기서는 제거
-      console.log(`[CanvasGateway] 게임 유저 초기화 완료: userId=${userId}`);
     }
 
     // 쿨다운 정보 자동 푸시
@@ -252,7 +223,7 @@ export class CanvasGateway implements OnGatewayInit {
         client.emit('cooldown_info', { cooldown: remaining > 0, remaining });
       } catch (error) {
         // 쿨다운 정보 조회 실패 시 무시
-        console.log(error);
+        console.error(error);
       }
     }
   }
@@ -278,9 +249,6 @@ export class CanvasGateway implements OnGatewayInit {
           userId,
         });
       if (!result.success) {
-        console.log(
-          `[소켓] 사용자 ${userId}의 픽셀 그리기 실패: ${result.message}`
-        );
         return;
       }
 
@@ -304,10 +272,6 @@ export class CanvasGateway implements OnGatewayInit {
           color: pixel.color,
         });
       });
-
-      console.log(
-        `[Gateway] 픽셀 그리기 완료: canvas=${pixel.canvas_id}, 위치=(${pixel.x},${pixel.y}), 색상=${pixel.color}`
-      );
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
     }
@@ -325,16 +289,12 @@ export class CanvasGateway implements OnGatewayInit {
     },
     @ConnectedSocket() client: Socket
   ) {
-    console.log('[CanvasGateway] send_result 이벤트 진입', data);
     const canvasType = await this.canvasService.getCanvasType(data.canvas_id);
-    console.log('[CanvasGateway] 캔버스 타입:', canvasType);
+
     if (canvasType === 'game_calculation') {
-      console.log('[CanvasGateway] gameLogicService.handleSendResult 호출');
       await this.gameLogicService.handleSendResult(data, client, this.server);
-      console.log('[CanvasGateway] gameLogicService.handleSendResult 완료');
       return;
     }
-    console.log('[CanvasGateway] 일반/이벤트 캔버스 - send_result 무시');
     // (일반/이벤트 캔버스에서는 무시)
   }
 }

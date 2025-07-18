@@ -67,10 +67,6 @@ export class GameService {
     canvasId: string,
     questions: QuestionDto[]
   ): Promise<string> {
-    console.log(
-      `[GameService] 게임 준비 시작: userId=${user_id}, canvasId=${canvasId}, questions=${questions.length}개`
-    );
-
     // 1. Redis에서 기존 색상 확인
     let color = await this.gameStateService.getUserColor(
       canvasId,
@@ -92,20 +88,10 @@ export class GameService {
           String(user_id),
           color
         );
-        console.log(
-          `[GameService] DB 색상 Redis 캐싱: userId=${user_id}, color=${color}`
-        );
       } else {
         // 4. DB에도 없으면 새로 생성
         color = generatorColor(user_id, canvasId, 1000);
-        console.log(
-          `[GameService] 새 색상 생성: userId=${user_id}, color=${color}`
-        );
       }
-    } else {
-      console.log(
-        `[GameService] Redis 색상 사용: userId=${user_id}, color=${color}`
-      );
     }
 
     try {
@@ -123,18 +109,8 @@ export class GameService {
              VALUES ($1, $2, $3, $4, $5, NOW())`,
             [user_id, canvasId, color, 0, 2]
           );
-          console.log(
-            `[GameService] game_user_result 새로 생성: user_id=${user_id}, canvas_id=${canvasId}, color=${color}`
-          );
-        } else {
-          console.log(
-            `[GameService] game_user_result 이미 존재: user_id=${user_id}, canvas_id=${canvasId}`
-          );
         }
 
-        console.log(
-          `[GameService] question_user 저장 시작: userId=${user_id}, questions=${questions.length}개`
-        );
         await manager
           .createQueryBuilder()
           .insert()
@@ -148,11 +124,8 @@ export class GameService {
             }))
           )
           .execute();
-        console.log(`[GameService] question_user 저장 완료: userId=${user_id}`);
       });
-      console.log(
-        `[GameService] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}, color=${color}`
-      );
+
       return color;
     } catch (err) {
       console.error(
@@ -179,9 +152,6 @@ export class GameService {
           }))
         )
         .execute();
-      console.log(
-        `[GameService] 문제 업로드 완료: questions=${questions.length}개`
-      );
     } catch (err) {
       console.error(`[GameService] 문제 업로드 실패:`, err);
       throw new InternalServerErrorException(

@@ -78,11 +78,6 @@ export class GroupService {
       return redisMessages.slice(0, take);
     }
 
-    // Redis에 데이터가 없으면 DB에서 가져와서 Redis에 캐싱
-    console.log(
-      `[캐시 미스] 그룹 ${groupId}의 채팅을 DB에서 가져와서 Redis에 캐싱`
-    );
-
     try {
       const chatRepo = this.dataSource.getRepository(Chat);
       const dbChats = await chatRepo.find({
@@ -115,10 +110,6 @@ export class GroupService {
         await this.redis.ltrim(chatKey, 0, 49); // 최대 50개만 유지
         await this.redis.expire(chatKey, 12 * 60 * 60); // 12시간 TTL
       }
-
-      console.log(
-        `[캐시 복구] 그룹 ${groupId}의 채팅 ${dbChats.length}개를 Redis에 캐싱 완료`
-      );
 
       // 요청된 개수만큼 반환 (최신순으로 정렬)
       return dbChats
@@ -267,7 +258,6 @@ export class GroupService {
       // 그룹 삭제 시 Redis 채팅도 즉시 삭제
       try {
         await this.redis.del(`chat:${group_id}`);
-        console.log(`[그룹 삭제] 그룹 ${group_id}의 Redis 채팅 삭제`);
       } catch (error) {
         console.error('[그룹 삭제] Redis 채팅 삭제 실패:', error);
       }
@@ -311,11 +301,10 @@ export class GroupService {
         'isJoined'
       )
       .getRawAndEntities();
-    console.log(groups);
 
     const rawResults = groups.raw;
     const allGroup = groups.entities;
-    console.log(rawResults);
+
     const userGroup = rawResults
       .map((row, idx) => {
         const isJoined = row.isJoined ?? false;
@@ -401,8 +390,6 @@ export class GroupService {
         return; // 정리할 게 없으면 조기 종료
       }
 
-      console.log(`[정리] 총 ${chatKeys.length}개의 채팅 키 발견`);
-
       let cleanedCount = 0;
 
       for (const chatKey of chatKeys) {
@@ -414,12 +401,10 @@ export class GroupService {
         if (!group) {
           // 그룹이 삭제된 경우 Redis 채팅도 삭제
           await this.redis.del(chatKey);
-          console.log(`[정리] 삭제된 그룹 ${groupId}의 채팅 삭제`);
+
           cleanedCount++;
         }
       }
-
-      console.log(`[정리] 완료: ${cleanedCount}개의 비활성 채팅 삭제`);
     } catch (error) {
       console.error('[정리] 비활성 그룹 채팅 정리 실패:', error);
     }

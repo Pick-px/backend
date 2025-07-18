@@ -42,9 +42,6 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
-    console.log(
-      `[tryDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`
-    );
     try {
       const hashKey = `canvas:${canvas_id}`;
       const field = `${x}:${y}`;
@@ -58,10 +55,6 @@ export class CanvasService {
       pipeline.sadd(`dirty_pixels:${canvas_id}`, field);
 
       await pipeline.exec();
-
-      console.log(
-        `Redis: 픽셀 저장 성공: ${hashKey} ${field} = ${color} ${userId}`
-      );
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
@@ -71,16 +64,14 @@ export class CanvasService {
 
   // Redis에서 픽셀 조회
   async getPixelsFromRedis(canvas_id: string): Promise<PixelInfo[]> {
-    console.time('fromRedis');
     const hash = await this.redisClient.hgetall(`canvas:${canvas_id}`);
-    console.timeEnd('fromRedis');
     const pixels: {
       x: number;
       y: number;
       color: string;
       owner: number | null;
     }[] = [];
-    console.time('push');
+
     for (const key in hash) {
       const [x, y] = key.split(':').map(Number);
       const value = hash[key];
@@ -101,13 +92,12 @@ export class CanvasService {
 
       pixels.push({ x, y, color, owner });
     }
-    console.timeEnd('push');
+
     return pixels;
   }
 
   // DB에서 픽셀 조회
-  async getPixelsFromDB(canvas_id: string): Promise<PixelInfo[]> {
-    console.time('fromdb');
+  async getPixelsFromDB(canvas_id: string): Promise<PixelInfo[] | null> {
     try {
       const dbPixels: {
         x: number;
@@ -118,9 +108,11 @@ export class CanvasService {
         'SELECT x, y, color, owner FROM pixels WHERE canvas_id = $1::INTEGER',
         [canvas_id]
       );
+      if (!dbPixels) throw new NotFoundException('Pixels not found');
       return dbPixels;
-    } finally {
-      console.timeEnd('fromdb');
+    } catch (err) {
+      console.error(err);
+      return null;
     }
   }
 
@@ -144,6 +136,7 @@ export class CanvasService {
 
     // 2. DB에서 조회
     const dbPixels = await this.getPixelsFromDB(realCanvasId);
+    if (!dbPixels) throw new NotFoundException('Pixels not found');
     // 3. Redis에 캐싱
     const pipeline = this.redisClient.pipeline();
     for (const pixel of dbPixels) {
@@ -186,11 +179,9 @@ export class CanvasService {
           color = value;
         }
 
-        console.log(`Redis: 픽셀 조회 성공: ${key} = ${color}`);
         return color;
       }
 
-      console.log(`픽셀 없음: ${key}`);
       return null;
     } catch (error) {
       console.error('픽셀 조회 실패:', error);
@@ -290,16 +281,12 @@ export class CanvasService {
         const isActive =
           new Date(startedAt) <= now && (!endedAt || new Date(endedAt) > now);
 
-        console.log(
-          `[CanvasService] 캔버스 ${canvasId} 활성 상태 캐시 히트: ${isActive}`
-        );
         return isActive;
       }
 
       // 2. DB에서 조회
       const canvas = await this.canvasRepository.findOneBy({ id: canvasId });
       if (!canvas) {
-        console.log(`[CanvasService] 캔버스 ${canvasId} 존재하지 않음`);
         return false;
       }
 
@@ -316,9 +303,6 @@ export class CanvasService {
         cacheKey,
         12 * 60 * 60,
         JSON.stringify(cacheData)
-      );
-      console.log(
-        `[CanvasService] 캔버스 ${canvasId} 활성 상태 DB 조회 후 캐싱: ${isActive}`
       );
 
       return isActive;
@@ -346,9 +330,6 @@ export class CanvasService {
     color: string;
     userId: number;
   }): Promise<boolean> {
-    console.log(
-      `[applyDrawPixel] 호출: canvas_id=${canvas_id}, x=${x}, y=${y}, color=${color}, userId=${userId}`
-    );
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
@@ -372,7 +353,6 @@ export class CanvasService {
     }
 
     try {
-      console.log(`[applyDrawPixel] 락 획득, tryDrawPixel 호출`);
       // 실제 픽셀 저장
       return await this.tryDrawPixel({ canvas_id, x, y, color, userId });
     } finally {
@@ -455,9 +435,6 @@ export class CanvasService {
     }
     // 게임 모드면 쿨다운 1초, 그 외는 3초
     const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 3;
-    console.log(
-      `[CanvasService] 쿨다운 설정: canvasType=${canvasType}, cooldownSeconds=${cooldownSeconds}`
-    );
 
     // 게임 캔버스인 경우 게임 시간 체크
     if (canvasType === 'game_calculation') {
@@ -467,9 +444,6 @@ export class CanvasService {
         canvasInfo?.metaData?.startedAt &&
         now < canvasInfo.metaData.startedAt
       ) {
-        console.log(
-          `[CanvasService] 게임 시작 전 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`
-        );
         return {
           success: false,
           message: '게임이 아직 시작되지 않았습니다.',
@@ -477,9 +451,6 @@ export class CanvasService {
       }
 
       if (canvasInfo?.metaData?.endedAt && now > canvasInfo.metaData.endedAt) {
-        console.log(
-          `[CanvasService] 게임 종료 후 색칠 시도 차단: userId=${userId}, canvasId=${canvas_id}`
-        );
         return {
           success: false,
           message: '게임이 이미 종료되었습니다.',
@@ -489,13 +460,8 @@ export class CanvasService {
 
     // 캔버스 활성 상태 먼저 체크
     const isActive = await this.isCanvasActive(parseInt(canvas_id));
-    console.log(
-      `[CanvasService] 사용자 ${userId}가 캔버스 ${canvas_id}에 색칠 시도 - 활성 상태: ${isActive}`
-    );
+
     if (!isActive) {
-      console.log(
-        `[CanvasService] 사용자 ${userId}가 비활성 캔버스 ${canvas_id}에 색칠 시도 차단`
-      );
       return {
         success: false,
         message: '시작되지 않았거나 종료된 캔버스입니다',
@@ -505,14 +471,8 @@ export class CanvasService {
 
     // 남은 쿨다운 확인 (Redis TTL 사용)
     const ttl = await this.redisClient.ttl(cooldownKey);
-    console.log(
-      `[CanvasService] 쿨다운 확인: userId=${userId}, canvasId=${canvas_id}, ttl=${ttl}`
-    );
 
     if (ttl > 0) {
-      console.log(
-        `[CanvasService] 쿨다운 중: userId=${userId}, remaining=${ttl}`
-      );
       return { success: false, message: '쿨다운 중', remaining: ttl };
     }
 
@@ -528,17 +488,11 @@ export class CanvasService {
     if (result) {
       // 쿨다운 설정
       await this.redisClient.setex(cooldownKey, cooldownSeconds, '1');
-      console.log(
-        `[CanvasService] 쿨다운 설정 완료: userId=${userId}, canvasId=${canvas_id}, seconds=${cooldownSeconds}`
-      );
     }
 
     // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
       await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
-      console.log(
-        `[CanvasService] 유저 캔버스 카운트 증가 완료: userId=${userId}, canvasId=${canvas_id}`
-      );
     } catch (error) {
       console.error('사용자 캔버스 카운트 증가 실패:', error);
       // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
@@ -624,10 +578,6 @@ export class CanvasService {
         });
         await this.userCanvasRepository.save(userCanvas);
       }
-
-      console.log(
-        `사용자 ${userId}의 캔버스 ${canvasId} try_count 증가: ${userCanvas.tryCount}`
-      );
     } catch (error) {
       console.error('user_canvas try_count 증가 중 오류:', error);
       throw error;
@@ -642,7 +592,7 @@ export class CanvasService {
   ): Promise<number> {
     const cooldownKey = `cooldown:${userId}:${canvasId}`;
     const ttl = await this.redisClient.ttl(cooldownKey);
-    console.log(`사용자 ${userId}, 캔버스 ${canvasId} - 남은 시간: ${ttl}초`);
+
     return ttl > 0 ? ttl : 0; // 초
   }
 

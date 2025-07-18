@@ -48,8 +48,6 @@ export class GroupGateway implements OnGatewayInit {
   ) {}
 
   afterInit(server: Server) {
-    console.log('[GroupGateway] afterInit 메서드 호출됨');
-
     // AppGateway, canvasGateway 초기화 완료 대기
     setTimeout(() => {
       this.initializeRedisAdapter(server);
@@ -61,21 +59,11 @@ export class GroupGateway implements OnGatewayInit {
     const pubClient = this.redis;
     const subClient = this.redis.duplicate();
 
-    console.log('[GroupGateway] Redis 상태 확인 중...', pubClient.status);
-    console.log('[GroupGateway] Redis 객체 타입:', typeof pubClient);
-    console.log('[GroupGateway] Redis 연결 상태:', pubClient.status);
-
     // Redis Adapter 설정 전 연결 상태 확인
     if (pubClient.status === 'ready') {
-      console.log('[GroupGateway] Redis 연결 준비됨, Adapter 설정 시작');
       this.setupRedisAdapter(server, pubClient, subClient);
     } else {
-      console.log(
-        '[GroupGateway] Redis 연결 대기 중... 현재 상태:',
-        pubClient.status
-      );
       pubClient.on('ready', () => {
-        console.log('[GroupGateway] Redis 연결 준비됨, Adapter 설정 시작');
         this.setupRedisAdapter(server, pubClient, subClient);
       });
 
@@ -92,7 +80,6 @@ export class GroupGateway implements OnGatewayInit {
     subClient: Redis
   ) {
     server.adapter(createAdapter(pubClient, subClient));
-    console.log('[GroupGateway] Redis Adapter 설정 완료');
   }
 
   // Redis 세션에서 사용자 정보 가져오기
@@ -147,7 +134,6 @@ export class GroupGateway implements OnGatewayInit {
 
     // 이미 해당 그룹 룸에 있으면 아무것도 하지 않음
     if (client.rooms.has(`group_${data.group_id}`)) {
-      console.log(`[GroupGateway] 이미 그룹 ${data.group_id}에 참여 중`);
       return;
     }
 
@@ -192,7 +178,7 @@ export class GroupGateway implements OnGatewayInit {
         client.emit('send_img', overlay[0]);
       }
     } catch (err) {
-      console.log(err);
+      console.error(err);
       client.emit('send_error', { message: '오버레이 조회 중 오류 발생' });
     }
   }
@@ -204,7 +190,7 @@ export class GroupGateway implements OnGatewayInit {
     @ConnectedSocket() client: Socket
   ) {
     const userId = await this.getUserIdFromClient(client);
-    client.leave(`group_${data.group_id}`);
+    await client.leave(`group_${data.group_id}`);
   }
 
   // 클라이언트가 채팅 메시지를 전송할 때 호출, Redis에 저장 및 브로드캐스트
@@ -286,7 +272,7 @@ export class GroupGateway implements OnGatewayInit {
 
       this.server.to(`group_${data.group_id}`).emit('send_img', overlayData);
     } catch (err) {
-      console.log(err);
+      console.error(err);
       client.emit('save_error', {
         message: 'overlay 데이터 저장 중 오류가 발생했습니다.',
       });

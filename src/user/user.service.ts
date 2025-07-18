@@ -66,9 +66,8 @@ export class UserService {
         })
       );
     } catch (err) {
-      console.log(err);
-      console.log('에러발생');
-      //console.error(err);
+      console.error(err);
+
       throw new Error('토큰 요청 중 오류 발생');
     }
 
@@ -90,7 +89,7 @@ export class UserService {
         'EX',
         SEVEN_DAYS_IN_SECONDS
       );
-      console.log('result', result);
+
       return result;
     } else if (site === 'kakao') {
       const data = response.data as KakaoTokenResponse;
@@ -229,9 +228,7 @@ export class UserService {
         size_y: uc.canvas.sizeY,
         try_count: uc.tryCount,
         own_count:
-          uc.canvas.endedAt && uc.canvas.type !== 'public'
-            ? uc.ownCount
-            : null,
+          uc.canvas.endedAt && uc.canvas.type !== 'public' ? uc.ownCount : null,
       }));
       return {
         email: user.email,
