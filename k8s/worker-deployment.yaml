@@ -29,11 +29,11 @@ spec:
           # 리소스 제한
           resources:
             requests:
+              memory: '2Gi'
+              cpu: '1000m'
+            limits:
               memory: '4Gi'
               cpu: '2000m'
-            limits:
-              memory: '8Gi'
-              cpu: '4000m'
           # Startup Probe 추가
           startupProbe:
             exec:
@@ -73,7 +73,7 @@ spec:
           env:
             # Node.js 메모리 제한 설정
             - name: NODE_OPTIONS
-              value: '--max-old-space-size=8192'
+              value: '--max-old-space-size=4096'
             - name: NODE_ENV
               value: 'production'
             # JWT Secret
