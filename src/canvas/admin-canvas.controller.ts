@@ -25,7 +25,7 @@ export class AdminCanvasController {
     return result;
   }
 
-  @Post('create')
+  @Post('canvas')
   @HttpCode(201)
   @ApiOperation({ summary: '캔버스 생성', description: '관리자 권한으로 새 캔버스를 생성합니다.' })
   @ApiBody({ schema: { example: { title: '캔버스 제목', type: 'public', size_x: 100, size_y: 100, started_at: '2025-07-18T19:21:17Z', ended_at: '2025-07-18T19:24:17Z' } } })
