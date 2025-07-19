@@ -37,7 +37,7 @@ export class CanvasHistoryService {
     try {
       // 1. 캔버스 정보 조회
       const canvas = await this.canvasRepository.findOne({
-        where: { id: canvasId }
+        where: { id: canvasId },
       });
       if (!canvas) throw new Error('Canvas not found');
 
@@ -97,16 +97,21 @@ export class CanvasHistoryService {
         topTryUserId: topTryUser[0]?.user_id || null,
         topTryUserCount: topTryUser[0]?.try_count || null,
         topOwnUserId: topOwnUser[0]?.user_id || null,
-        topOwnUserCount: topOwnUser[0]?.own_count || null
+        topOwnUserCount: topOwnUser[0]?.own_count || null,
       });
 
       await this.canvasHistoryRepository.save(canvasHistory);
       await queryRunner.commitTransaction();
 
-      console.log(`[CanvasHistoryService] 캔버스 ${canvasId} 히스토리 생성 완료 (최적화됨)`);
+      console.log(
+        `[CanvasHistoryService] 캔버스 ${canvasId} 히스토리 생성 완료 (최적화됨)`
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(`[CanvasHistoryService] 캔버스 ${canvasId} 히스토리 생성 실패:`, error);
+      console.error(
+        `[CanvasHistoryService] 캔버스 ${canvasId} 히스토리 생성 실패:`,
+        error
+      );
       throw error;
     } finally {
       await queryRunner.release();
@@ -145,34 +150,36 @@ export class CanvasHistoryService {
 
     const results = await this.dataSource.query(query);
     // presigned URL 변환 (비동기 map)
-    return await Promise.all(results.map(async row => {
-      let presignedUrl: string | null = null;
-      if (row.image_url) {
-        try {
-          presignedUrl = await this.awsService.getPreSignedUrl(row.image_url);
-          console.log(`[GalleryData] presignedUrl 생성: key=${row.image_url}, url=${presignedUrl}`);
-        } catch (e) {
-          console.error(`[GalleryData] presignedUrl 생성 실패: key=${row.image_url}`, e);
-          presignedUrl = null;
+    return await Promise.all(
+      results.map(async (row) => {
+        let presignedUrl: string | null = null;
+        if (row.image_url) {
+          try {
+            presignedUrl = await this.awsService.getPreSignedUrl(row.image_url);
+          } catch (e) {
+            console.error(
+              `[GalleryData] presignedUrl 생성 실패: key=${row.image_url}`,
+              e
+            );
+            presignedUrl = null;
+          }
         }
-      } else {
-        console.log(`[GalleryData] image_url 없음: row=`, row);
-      }
-      return {
-        image_url: presignedUrl,
-        title: row.title,
-        type: row.type,
-        created_at: row.created_at,
-        ended_at: row.ended_at,
-        size_x: row.size_x,
-        size_y: row.size_y,
-        participant_count: row.participant_count,
-        total_try_count: row.total_try_count,
-        top_try_user_name: row.top_try_user_name ?? null,
-        top_try_user_count: row.top_try_user_count ?? null,
-        top_own_user_name: row.top_own_user_name ?? null,
-        top_own_user_count: row.top_own_user_count ?? null
-      };
-    }));
+        return {
+          image_url: presignedUrl,
+          title: row.title,
+          type: row.type,
+          created_at: row.created_at,
+          ended_at: row.ended_at,
+          size_x: row.size_x,
+          size_y: row.size_y,
+          participant_count: row.participant_count,
+          total_try_count: row.total_try_count,
+          top_try_user_name: row.top_try_user_name ?? null,
+          top_try_user_count: row.top_try_user_count ?? null,
+          top_own_user_name: row.top_own_user_name ?? null,
+          top_own_user_count: row.top_own_user_count ?? null,
+        };
+      })
+    );
   }
-} 
+}

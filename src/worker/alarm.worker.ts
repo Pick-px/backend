@@ -12,7 +12,9 @@ let nestApp: any = null;
 async function getGameLogicService(): Promise<GameLogicService> {
   if (gameLogicService) return gameLogicService;
   if (!nestApp) {
-    nestApp = await NestFactory.createApplicationContext(AppModule, { logger: false });
+    nestApp = await NestFactory.createApplicationContext(AppModule, {
+      logger: false,
+    });
   }
   gameLogicService = nestApp.get(GameLogicService);
   if (!gameLogicService) throw new Error('GameLogicService DI 실패');
@@ -59,7 +61,9 @@ async function handleThirtySecBeforeStart(data: JobData, io: Server) {
   // 캔버스 상태 체크
   const canvas = await getCanvasById(canvas_id);
   if (!canvas) {
-    console.log(`[alarm.worker] 30초전 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    console.log(
+      `[alarm.worker] 30초전 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`
+    );
     return;
   }
   if (canvas.startedAt && new Date() > new Date(canvas.startedAt)) {
@@ -74,7 +78,6 @@ async function handleThirtySecBeforeStart(data: JobData, io: Server) {
     server_time: new Date(),
     remain_time: 30,
   });
-  console.log('30초 전 알람 발송');
 }
 
 async function handleThreeSecBeforeEnd(data: JobData, io: Server) {
@@ -83,7 +86,9 @@ async function handleThreeSecBeforeEnd(data: JobData, io: Server) {
   // 캔버스 상태 체크
   const canvas = await getCanvasById(canvas_id);
   if (!canvas) {
-    console.log(`[alarm.worker] 3초전 종료 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    console.log(
+      `[alarm.worker] 3초전 종료 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`
+    );
     return;
   }
   if (canvas.endedAt && new Date() > new Date(canvas.endedAt)) {
@@ -98,7 +103,6 @@ async function handleThreeSecBeforeEnd(data: JobData, io: Server) {
     server_time: new Date(),
     remain_time: 3,
   });
-  console.log('끝나기 3초전 알람 발송');
 }
 
 async function handleThreeSecBeforeStart(data: JobData, io: Server) {
@@ -107,7 +111,9 @@ async function handleThreeSecBeforeStart(data: JobData, io: Server) {
   // 캔버스 상태 체크
   const canvas = await getCanvasById(canvas_id);
   if (!canvas) {
-    console.log(`[alarm.worker] 3초전 시작 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`);
+    console.log(
+      `[alarm.worker] 3초전 시작 알람: 캔버스 삭제됨, emit skip: ${canvas_id}`
+    );
     return;
   }
   if (canvas.startedAt && new Date() > new Date(canvas.startedAt)) {
@@ -122,7 +128,6 @@ async function handleThreeSecBeforeStart(data: JobData, io: Server) {
     server_time: new Date(),
     remain_time: 3,
   });
-  console.log('시작 3초전 알람 발송');
 }
 
 async function handleGameEnd(data: JobData, io: Server) {
@@ -130,14 +135,14 @@ async function handleGameEnd(data: JobData, io: Server) {
     // GameLogicService DI로 가져오기
     const gameLogic = (await getGameLogicService())!;
     // 캔버스 타입이 game_calculation인지 확인하려면, gameLogicService의 canvasService 사용
-    const canvasInfo = await gameLogic['canvasService'].getCanvasById(String(data.canvas_id));
+    const canvasInfo = await gameLogic['canvasService'].getCanvasById(
+      String(data.canvas_id)
+    );
     if (canvasInfo?.metaData?.type !== 'game_calculation') {
-      console.log(`[alarm.worker] game-end: 캔버스 타입이 game_calculation이 아님, 무시`);
       return;
     }
-    console.log(`[alarm.worker] game-end: forceGameEnd 호출: canvas_id=${data.canvas_id}`);
+
     await gameLogic.forceGameEnd(String(data.canvas_id), io);
-    console.log(`[alarm.worker] game-end: forceGameEnd 완료: canvas_id=${data.canvas_id}`);
   } catch (err) {
     console.error(`[alarm.worker] game-end: forceGameEnd 에러:`, err);
   }

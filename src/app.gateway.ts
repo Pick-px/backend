@@ -86,12 +86,12 @@ export class AppGateway
         console.log(`[AppGateway] 클라이언트 연결됨: ${socket.id}`);
 
         // 모든 이벤트 로깅
-        socket.onAny((eventName, ...args) => {
-          console.log(
-            `[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`,
-            args
-          );
-        });
+        // socket.onAny((eventName, ...args) => {
+        //   console.log(
+        //     `[AppGateway] 이벤트 수신 [${eventName}] from ${socket.id}:`,
+        //     args
+        //   );
+        // });
       });
 
       // 주기적 접속자 수 업데이트 시작
@@ -108,17 +108,11 @@ export class AppGateway
       const oldSocketCount = await this.redis.scard('active_sockets');
       if (oldSocketCount > 0) {
         await this.redis.del('active_sockets');
-        console.log(
-          `[AppGateway] 서버 시작 시 이전 소켓 ID ${oldSocketCount}개 정리됨`
-        );
       }
       // canvas:*:sockets 키 모두 삭제
       const canvasSocketKeys = await this.redis.keys('canvas:*:sockets');
       if (canvasSocketKeys.length > 0) {
         await this.redis.del(...canvasSocketKeys);
-        console.log(
-          `[AppGateway] 서버 시작 시 canvas:*:sockets 키 ${canvasSocketKeys.length}개 삭제 완료`
-        );
       }
     } catch (error) {
       console.error('[AppGateway] 이전 소켓/canvas 정리 중 에러:', error);
@@ -130,9 +124,9 @@ export class AppGateway
     if (user) {
       // JWT 검증 결과를 Redis 세션에 저장
       await this.saveUserSession(user, client.id);
-      console.log(`[AppGateway] 클라이언트 연결(로그인):`, user);
+      // console.log(`[AppGateway] 클라이언트 연결(로그인):`, user);
     } else {
-      console.log(`[AppGateway] 클라이언트 연결(비로그인):`, client.id);
+      // console.log(`[AppGateway] 클라이언트 연결(비로그인):`, client.id);
     }
 
     // 모든 소켓 연결을 Redis에 저장 (로그인 여부와 관계없이)
@@ -146,7 +140,7 @@ export class AppGateway
   async handleDisconnect(client: Socket) {
     // 사용자 세션 정리
     await this.removeUserSession(client.id);
-    console.log(`[AppGateway] 유저 연결 해제:`, client.id);
+    // console.log(`[AppGateway] 유저 연결 해제:`, client.id);
 
     // 소켓 연결 제거
     await this.redis.srem('active_sockets', client.id);
@@ -166,7 +160,7 @@ export class AppGateway
       for (const key of canvasKeys) {
         await this.redis.srem(key, socketId);
       }
-      console.log(`[AppGateway] 소켓 ${socketId}를 모든 캔버스에서 제거함`);
+      // console.log(`[AppGateway] 소켓 ${socketId}를 모든 캔버스에서 제거함`);
     } catch (error) {
       console.error('[AppGateway] 모든 캔버스에서 소켓 제거 중 에러:', error);
     }
@@ -206,9 +200,9 @@ export class AppGateway
       await this.redis.sadd(userKey, socketId);
       await this.redis.expire(userKey, 3600);
 
-      console.log(
-        `[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`
-      );
+      // console.log(
+      //   `[AppGateway] 사용자 ${userId} 세션 저장됨 (소켓: ${socketId})`
+      // );
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 저장 중 에러:', error);
     }
@@ -236,9 +230,9 @@ export class AppGateway
           await this.redis.del(userKey);
         }
 
-        console.log(
-          `[AppGateway] 사용자 ${userId} 세션 제거됨 (소켓: ${socketId})`
-        );
+        // console.log(
+        //   `[AppGateway] 사용자 ${userId} 세션 제거됨 (소켓: ${socketId})`
+        // );
       }
     } catch (error) {
       console.error('[AppGateway] 사용자 세션 제거 중 에러:', error);
