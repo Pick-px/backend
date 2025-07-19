@@ -10,6 +10,28 @@ import './history.worker';
 
 config();
 
+async function initializeDataSourceWithRetry(
+  retries = 3,
+  delay = 2000
+): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`[DB] 데이터베이스 연결 시도 ${attempt}/${retries}...`);
+      await AppDataSource.initialize();
+      console.log('[DB] 데이터베이스 연결 성공');
+      return;
+    } catch (error) {
+      console.error(`[DB] 연결 실패 (시도 ${attempt}/${retries}):`, error);
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        console.error('[DB] 최대 재시도 횟수 도달. 종료합니다.');
+        process.exit(1);
+      }
+    }
+  }
+}
+
 type PixelGenerationJobData = {
   canvas_id: number;
   size_x: number;
@@ -372,7 +394,8 @@ void (async () => {
     redis = new Redis(redisConnection);
     await redis.ping();
     // console.log('[Worker] Redis 연결 성공');
-    await AppDataSource.initialize();
+    // await AppDataSource.initialize();
+    await initializeDataSourceWithRetry();
     // console.log('[Worker] DataSource 초기화 완료');
 
     // Redis 이벤트 리스너 설정
