@@ -4,13 +4,11 @@ import { Canvas } from '../canvas/entity/canvas.entity';
 async function isEndingWithOneDay(canvas: Canvas) {
   const now = Date.now();
   const endedAtTime = new Date(canvas.endedAt).getTime();
-  const delay = endedAtTime - now;
-
-  // 1일 이내 종료되는 경우 → 큐에 바로 등록
+  let delay = endedAtTime - now + 5000; // ended_at + 5초
+  if (delay < 0) delay = 0;
   const ONE_DAYS = 1000 * 60 * 60 * 24 * 1;
   const jobId = `history-${canvas.id}`;
-
-  if (delay > 0 && delay <= ONE_DAYS) {
+  if (endedAtTime > 0 && endedAtTime <= now + ONE_DAYS) {
     await historyQueue.add(
       'canvas-history',
       {

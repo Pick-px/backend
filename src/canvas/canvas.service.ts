@@ -10,6 +10,7 @@ import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 import { PixelInfo } from '../interface/PixelInfo.interface';
 import { CanvasHistory } from './entity/canvasHistory.entity';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
+import { historyQueue } from '../queues/bullmq.queue';
 
 @Injectable()
 export class CanvasService {
@@ -209,13 +210,21 @@ export class CanvasService {
           []
         );
         return result;
-      } else {
+      } else if (status === 'inactive') {
         // 종료된 캔버스만
         const result: CanvasInfo[] = await this.dataSource.query(
           `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
            from canvases 
            where ended_at IS NOT NULL AND ended_at <= NOW()
            and (type like 'event%' or type = 'public')`,
+          []
+        );
+        return result;
+      } else {
+        // 전체 반환
+        const result: CanvasInfo[] = await this.dataSource.query(
+          `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y 
+           from canvases`,
           []
         );
         return result;
@@ -230,7 +239,8 @@ export class CanvasService {
       const games: CanvasInfo[] = await this.dataSource.query(
         `select id as "canvasId", title, type, created_at, started_at, ended_at, size_x, size_y
         from canvases
-        where (ended_at < NOW()) and type like 'game%'`
+
+        where (started_at > NOW()) and type = 'game%'`
       );
       return games;
     } catch (err) {
@@ -435,6 +445,14 @@ export class CanvasService {
   }): Promise<DrawPixelResponse> {
     // 캔버스 타입 조회
     const canvasType = await this.getCanvasType(canvas_id);
+    // 캔버스 존재 여부 체크
+    const canvasInfo = await this.getCanvasById(canvas_id);
+    if (!canvasInfo?.metaData) {
+      return {
+        success: false,
+        message: '관리자에 의해 삭제된 캔버스입니다.',
+      };
+    }
     // 게임 모드면 쿨다운 1초, 그 외는 3초
     const cooldownSeconds = canvasType === 'game_calculation' ? 1 : 3;
     console.log(
@@ -443,7 +461,6 @@ export class CanvasService {
 
     // 게임 캔버스인 경우 게임 시간 체크
     if (canvasType === 'game_calculation') {
-      const canvasInfo = await this.getCanvasById(canvas_id);
       const now = new Date();
 
       if (
@@ -643,5 +660,36 @@ export class CanvasService {
     const isActive = now <= startedAt;
 
     return isActive;
+  }
+
+  // 캔버스 및 연관 데이터 하드 딜리트
+  async deleteCanvasById(canvasId: number | string): Promise<boolean> {
+    const id = Number(canvasId);
+    if (isNaN(id)) return false;
+    const result = await this.canvasRepository.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
+
+  // 강제 종료: ended_at을 현재로 업데이트
+  async forceEndCanvas(canvasId: number | string): Promise<boolean> {
+    const id = Number(canvasId);
+    if (isNaN(id)) return false;
+    const now = new Date();
+    const result = await this.canvasRepository.update(id, { endedAt: now });
+    // ended_at을 now로 바꾼 후, 5초 delay로 historyQueue에 잡 등록
+    const canvas = await this.canvasRepository.findOneBy({ id });
+    if (canvas) {
+      await historyQueue.add(
+        'canvas-history',
+        {
+          canvas_id: id,
+          size_x: canvas.sizeX,
+          size_y: canvas.sizeY,
+          type: canvas.type,
+        },
+        { jobId: `history-${id}`, delay: 5000 }
+      );
+    }
+    return (result.affected ?? 0) > 0;
   }
 }
