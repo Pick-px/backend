@@ -16,6 +16,7 @@ import { PixelModule } from '../pixel/pixel.module';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
 import { CanvasHistoryService } from './canvas-history.service';
 import { GalleryController } from './gallery.controller';
+import { AdminCanvasController } from '../canvas/admin-canvas.controller';
 import { UserModule } from '../user/user.module';
 import { GameModule } from '../game/game.module';
 import { PublicCanvasStrategy } from './strategy/publicCanvasStrategy.strategy';
@@ -25,6 +26,7 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
 import { AwsModule } from '../aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
+import { BroadcastService } from './broadcast.service';
 
 @Module({
   imports: [
@@ -46,7 +48,7 @@ import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
     forwardRef(() => GameModule), // GameModule 추가
     AwsModule, // AwsModule 추가
   ],
-  controllers: [CanvasController, GalleryController],
+  controllers: [CanvasController, GalleryController, AdminCanvasController],
   providers: [
     CanvasService,
     CanvasGateway,
@@ -57,6 +59,7 @@ import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
     EventColorLimitCanvasStrategy,
     CanvasHistoryService,
     CanvasHistoryBatch,
+    BroadcastService,
   ],
   exports: [CanvasService, CanvasHistoryService],
 })

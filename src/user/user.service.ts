@@ -66,9 +66,8 @@ export class UserService {
         })
       );
     } catch (err) {
-      console.log(err);
-      console.log('에러발생');
-      //console.error(err);
+      console.error(err);
+
       throw new Error('토큰 요청 중 오류 발생');
     }
 
@@ -90,7 +89,7 @@ export class UserService {
         'EX',
         SEVEN_DAYS_IN_SECONDS
       );
-      console.log('result', result);
+
       return result;
     } else if (site === 'kakao') {
       const data = response.data as KakaoTokenResponse;
@@ -116,10 +115,11 @@ export class UserService {
         createdAt: new Date(),
         updatedAt: new Date(),
         userName: userInfo.userName,
+        role: 'user',
       });
       try {
         const result = await this.userRepository.save(newUser);
-        const token = this.authService.generateJWT(result.id, result.userName);
+        const token = this.authService.generateJWT(result.id, result.userName, result.role);
         return token;
       } catch (err) {
         const existUser = await this.userRepository.findOne({
@@ -128,10 +128,10 @@ export class UserService {
 
         if (!existUser) throw new Error('동시성 문제 발생!');
 
-        return this.authService.generateJWT(existUser.id, existUser.userName);
+        return this.authService.generateJWT(existUser.id, existUser.userName, existUser.role);
       }
     } else {
-      return this.authService.generateJWT(user.id, user.userName);
+      return this.authService.generateJWT(user.id, user.userName, user.role);
     }
   }
 
@@ -228,9 +228,7 @@ export class UserService {
         size_y: uc.canvas.sizeY,
         try_count: uc.tryCount,
         own_count:
-          uc.canvas.endedAt && uc.canvas.type !== 'public'
-            ? uc.ownCount
-            : null,
+          uc.canvas.endedAt && uc.canvas.type !== 'public' ? uc.ownCount : null,
       }));
       return {
         email: user.email,
@@ -268,9 +266,10 @@ export class UserService {
       createdAt: now,
       updatedAt: now,
       userName: userName,
+      role: 'guest',
     });
     const saved: User = await this.userRepository.save(newUser);
-    const token = await this.authService.generateJWT(saved.id, saved.userName);
+    const token = await this.authService.generateJWT(saved.id, saved.userName, saved.role);
     return {
       isSuccess: true,
       code: '200',

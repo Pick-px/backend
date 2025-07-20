@@ -90,6 +90,10 @@ export class CanvasController {
     const canvas = await this.canvasService.getCanvasById(canvas_id);
     if (!canvas?.metaData) throw new NotFoundException('캔버스가 없습니다.');
 
+    if (/^game_/.test(canvas.metaData.type)) {
+      throw new NotFoundException('게임 타입 캔버스는 접근할 수 없습니다.');
+    }
+
     // 캔버스 활성 상태 체크
     const now = new Date();
     const meta = canvas.metaData;

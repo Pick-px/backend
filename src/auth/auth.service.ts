@@ -23,16 +23,16 @@ export class AuthService {
     private readonly userRepository: Repository<User>
   ) {}
 
-  generateAccessJWT(user_id: string, userName: string): string {
+  generateAccessJWT(user_id: string, userName: string, role: 'admin' | 'user' | 'guest'): string {
     const payload = {
-      sub: { userId: user_id, nickName: userName },
+      sub: { userId: user_id, nickName: userName, role: role },
       jti: randomUUID(),
     };
     return this.jwtService.sign(payload, { expiresIn: '15m' });
   }
 
-  async generateRefreshJWT(user_id: string): Promise<string> {
-    const payload = { sub: { userId: user_id }, jti: randomUUID() };
+  async generateRefreshJWT(user_id: string, role: 'admin' | 'user' | 'guest'): Promise<string> {
+    const payload = { sub: { userId: user_id, role }, jti: randomUUID() };
     const refresh_token = this.jwtService.sign(payload, { expiresIn: '7d' });
     await this.setRefreshTokenInRedis(payload.jti, refresh_token);
     return refresh_token;
@@ -40,12 +40,13 @@ export class AuthService {
 
   async generateJWT(
     user_id: number,
-    userName: string
+    userName: string,
+    role: 'admin' | 'user' | 'guest'
   ): Promise<{ access_token: string; refresh_token: string }> {
     const _id = user_id.toString();
     return {
-      access_token: this.generateAccessJWT(_id, userName),
-      refresh_token: await this.generateRefreshJWT(_id),
+      access_token: this.generateAccessJWT(_id, userName, role),
+      refresh_token: await this.generateRefreshJWT(_id, role),
     };
   }
 
@@ -77,7 +78,7 @@ export class AuthService {
 
       if (!user) throw new NotFoundException('유저가 없습니다.');
 
-      const token = await this.generateJWT(user.id, user.userName);
+      const token = await this.generateJWT(user.id, user.userName, user.role);
       const payload: JwtPayload = this.jwtService.decode<JwtPayload>(
         token.refresh_token
       );

@@ -33,11 +33,11 @@ spec:
           # 리소스 설정
           resources:
             requests:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: '2Gi'
+              cpu: '1000m'
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: '4Gi'
+              cpu: '2000m'
           # 상태 체크 프로브
           startupProbe:
             httpGet:
@@ -67,14 +67,14 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 10"]
+                command: ['/bin/sh', '-c', 'sleep 10']
           env:
             - name: NODE_ENV
               value: 'production'
             - name: PORT
               value: '3000'
             - name: NODE_OPTIONS
-              value: '--max-old-space-size=2048'
+              value: '--max-old-space-size=4096'
             # JWT Secret
             - name: JWT_SECRET
               valueFrom:

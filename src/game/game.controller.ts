@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AuthRequest } from '../interface/AuthRequest.interface';
 import { UploadQuestionDto } from './dto/uploadQuestion.dto';
 import { GameStateService } from './game-state.service';
+import { CanvasInfo } from '../interface/CanvasInfo.interface';
 
 interface UploadRequet {
   questions: UploadQuestionDto[];
@@ -34,15 +35,10 @@ export class GameController {
     @Req() req: AuthRequest,
     @Query('canvasId') canvasId: string
   ) {
-    console.log(`[GameController] 대기실 요청: canvasId=${canvasId}`);
     try {
       const user_id = req.user?._id;
-      console.log(`[GameController] 유저 정보: userId=${user_id}`);
 
       const questions: QuestionDto[] = await this.gameService.getQuestions();
-      console.log(
-        `[GameController] 문제 조회: questions=${questions.length}개`
-      );
 
       // setGameReady에서 색상 생성 및 반환
       const color = await this.gameService.setGameReady(
@@ -50,22 +46,14 @@ export class GameController {
         canvasId,
         questions
       );
-      console.log(
-        `[GameController] 게임 준비 완료: userId=${user_id}, canvasId=${canvasId}, color=${color}`
-      );
 
       const data = await this.gameService.getData(canvasId, color, questions);
-      console.log(
-        `[GameController] 게임 데이터 조회 완료: canvasId=${canvasId}`
-      );
-
-      console.log('waiting room data: ', data);
 
       try {
         const resposne = new WaitingResponseDto();
         resposne.data = data;
         resposne.success = true;
-        console.log(`[GameController] 응답 생성 완료: success=true`);
+
         return resposne;
       } catch (err) {
         console.error(`[GameController] 응답 생성 실패:`, err);
@@ -90,6 +78,17 @@ export class GameController {
     } catch (err) {
       console.error(`[GameController] 문제 업로드 실패:`, err);
       return { success: false };
+    }
+  }
+
+  @Get('list')
+  async getGameList() {
+    try {
+      const games: CanvasInfo[] = await this.gameService.getGameList();
+      return games;
+    } catch (err) {
+      console.error('Error 발생 : ', err);
+      throw err;
     }
   }
 }

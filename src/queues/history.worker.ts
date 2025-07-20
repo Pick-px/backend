@@ -13,7 +13,6 @@ const historyRepository = AppDataSource.getRepository(CanvasHistory);
 const historyWorker = new Worker(
   'canvas-history',
   async (job: Job) => {
-    console.time('history start');
     const { canvas_id, size_x, size_y, type } = job.data;
 
     if (!job.data) throw new Error('job.data is undefined');
@@ -27,7 +26,6 @@ const historyWorker = new Worker(
     const contentType = 'image/png';
     const key = `history/${canvas_id}/${randomUUID()}.png`;
     await uploadBufferToS3(buffer, key, contentType);
-    console.timeEnd('history start');
 
     const history = await historyRepository.findOne({
       where: { canvas: { id: Number(canvas_id) } },
@@ -45,9 +43,6 @@ const historyWorker = new Worker(
       try {
         // CanvasHistoryService를 직접 호출하는 대신 SQL로 처리
         await createCanvasHistoryData(canvas_id);
-        console.log(
-          `[HistoryWorker] 캔버스 ${canvas_id} 히스토리 데이터 생성 완료`
-        );
       } catch (error) {
         console.error(
           `[HistoryWorker] 캔버스 ${canvas_id} 히스토리 데이터 생성 실패:`,
@@ -157,9 +152,6 @@ async function createCanvasHistoryData(canvasId: number): Promise<void> {
     ]);
 
     await queryRunner.commitTransaction();
-    console.log(
-      `[Worker] 캔버스 ${canvasId} 히스토리 데이터 생성 완료 (최적화됨)`
-    );
   } catch (error) {
     await queryRunner.rollbackTransaction();
     console.error(

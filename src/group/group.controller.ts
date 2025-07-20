@@ -313,17 +313,16 @@ export class GroupController {
   @ApiBearerAuth()
   async createGroup(@Req() req: AuthRequest, @Body() data: CreateGroupDto) {
     const _id = req.user._id;
-    console.log(_id);
+
     const { name, maxParticipants, canvasId } = data;
     try {
-      console.log('canvas Id : ', canvasId);
       await this.groupService.createGroup(name, maxParticipants, canvasId, _id);
       const response = new BaseResponseDto();
       response.isSuccess = true;
       response.message = '그룹 생성에 성공하였습니다.';
       return response;
     } catch (err) {
-      console.log(err.message);
+      console.error(err.message);
       if (err instanceof HttpException) {
         throw err;
       }
@@ -356,7 +355,7 @@ export class GroupController {
       response.isSuccess = true;
       response.message = '그룹 참여에 성공하였습니다.';
       response.data = await this.groupService.getGroupList(canvas_id, _id);
-      console.log('response: ', response.data);
+
       return response;
     } catch (err) {
       if (err instanceof HttpException) {
@@ -396,7 +395,7 @@ export class GroupController {
       response.message = '그룹 참여에 성공하였습니다.';
       return response;
     } catch (err) {
-      console.log(err.message);
+      console.error(err);
       if (err instanceof HttpException) {
         throw err;
       }
@@ -468,7 +467,7 @@ export class GroupController {
         canvas_id,
         _id
       );
-      console.log(response.data);
+
       return response;
     } catch (err) {
       if (err instanceof HttpException) {
@@ -515,12 +514,5 @@ export class GroupController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
-  }
-
-  @Get('test')
-  async testAPI(@Query('group_id') group_id: string) {
-    const result = await this.groupService.getOverlayData(group_id);
-    console.log('result: ', result);
-    console.log('result[0]: ', result[0]);
   }
 }
