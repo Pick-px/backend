@@ -16,7 +16,6 @@ import { setSocketServer } from '../socket/socket.manager';
 import { GameLogicService } from '../game/game-logic.service';
 import { GameStateService } from '../game/game-state.service';
 import { BroadcastService } from './broadcast.service';
-import { PixelBatchPub } from './pixelBatchPub.service';
 
 interface SocketUser {
   id: number;
