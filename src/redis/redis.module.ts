@@ -48,9 +48,9 @@ const createRedisClient = (configService: ConfigService): Redis => {
             rejectUnauthorized: false,
           }
         : undefined,
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 5,
       retryStrategy: (times) => {
-        const delay = Math.min(times * 100, 3000);
+        const delay = Math.min(500 + times * 200, 5000);
         console.log(`[Redis] 재연결 시도 ${times}회, ${delay}ms 후 재시도`);
         return delay;
       },

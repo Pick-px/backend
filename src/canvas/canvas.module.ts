@@ -26,6 +26,7 @@ import { EventColorLimitCanvasStrategy } from './strategy/eventColorLimitCanvasS
 import { AwsModule } from '../aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
+import { BroadcastService } from './broadcast.service';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { CanvasHistoryBatch } from './batch/canvasHistory.batch';
     EventColorLimitCanvasStrategy,
     CanvasHistoryService,
     CanvasHistoryBatch,
+    BroadcastService,
   ],
   exports: [CanvasService, CanvasHistoryService],
 })

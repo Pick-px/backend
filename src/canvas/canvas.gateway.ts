@@ -15,6 +15,8 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { setSocketServer } from '../socket/socket.manager';
 import { GameLogicService } from '../game/game-logic.service';
 import { GameStateService } from '../game/game-state.service';
+import { BroadcastService } from './broadcast.service';
+import { PixelBatchPub } from './pixelBatchPub.service';
 
 interface SocketUser {
   id: number;
@@ -40,7 +42,8 @@ export class CanvasGateway implements OnGatewayInit {
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
     private readonly gameLogicService: GameLogicService, // 게임 특화 로직 주입
-    private readonly gameStateService: GameStateService // 게임 상태 관리 주입
+    private readonly gameStateService: GameStateService, // 게임 상태 관리 주입
+    private readonly broadcastService: BroadcastService // 브로드캐스트 서비스 주입
   ) {}
 
   afterInit(server: Server) {
@@ -153,14 +156,24 @@ export class CanvasGateway implements OnGatewayInit {
         })
       );
 
+      console.log('픽셀 그리기 성공:', pixel);
+
       // 비동기 브로드캐스트 (응답 속도 향상)
-      setImmediate(() => {
-        this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
-          x: pixel.x,
-          y: pixel.y,
-          color: pixel.color,
-        });
+      this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
+        pixels: [
+          {
+            x: pixel.x,
+            y: pixel.y,
+            color: pixel.color,
+          },
+        ],
       });
+      // this.broadcastService.addPixelToBatch({
+      //   canvas_id: pixel.canvas_id,
+      //   x: pixel.x,
+      //   y: pixel.y,
+      //   color: pixel.color,
+      // });
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
       client.emit('pixel_error', { message: '픽셀 그리기 실패' });
@@ -265,12 +278,19 @@ export class CanvasGateway implements OnGatewayInit {
       );
 
       // 비동기 브로드캐스트 (응답 속도 향상)
-      setImmediate(() => {
-        this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
-          x: pixel.x,
-          y: pixel.y,
-          color: pixel.color,
-        });
+      // setImmediate(() => {
+      //   this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
+      //     x: pixel.x,
+      //     y: pixel.y,
+      //     color: pixel.color,
+      //   });
+      // });
+
+      this.broadcastService.addPixelToBatch({
+        canvas_id: pixel.canvas_id,
+        x: pixel.x,
+        y: pixel.y,
+        color: pixel.color,
       });
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);

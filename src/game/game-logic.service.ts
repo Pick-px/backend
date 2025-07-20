@@ -101,7 +101,7 @@ export class GameLogicService {
         color: data.color,
         userId: Number(userId),
       });
-      server.to(`canvas_${data.canvas_id}`).emit('pixel_update', {
+      server.to(`canvas_${data.canvas_id}`).emit('game_pixel_update', {
         x: data.x,
         y: data.y,
         color: data.color,
