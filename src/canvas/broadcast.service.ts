@@ -1,21 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { Server } from 'socket.io';
+import { waitForSocketServer } from '../socket/socket.manager';
 
 interface PixelUpdate {
   canvas_id: string;
   x: number;
   y: number;
   color: string;
+  // owner: number;
 }
 
 @Injectable()
 export class BroadcastService {
   private pixelBatchQueue = new Map<string, PixelUpdate[]>();
-  private batchTimeout: NodeJS.Timeout | null = null;
-  private readonly BATCH_SIZE = 50;
+  private batchTimeouts = new Map<string, NodeJS.Timeout>();
+  private readonly BATCH_SIZE = 30;
   private readonly BATCH_TIMEOUT_MS = 16.67; // 60fps (1000ms / 60)
+  private server: Server | null = null;
 
-  constructor(private server: Server) {}
+  private async getServer(): Promise<Server> {
+    if (this.server) return this.server;
+    this.server = await waitForSocketServer(); // 🔐 안전
+    return this.server;
+  }
 
   addPixelToBatch(pixel: PixelUpdate) {
     const { canvas_id } = pixel;
@@ -30,25 +37,29 @@ export class BroadcastService {
     if (this.pixelBatchQueue.get(canvas_id)!.length >= this.BATCH_SIZE) {
       this.flushBatch(canvas_id);
     } else {
-      this.scheduleBatchFlush();
+      this.scheduleBatchFlush(canvas_id);
     }
   }
 
-  private scheduleBatchFlush() {
-    if (this.batchTimeout) return;
+  private scheduleBatchFlush(canvas_id: string) {
+    if (this.batchTimeouts.has(canvas_id)) return;
 
-    this.batchTimeout = setTimeout(() => {
-      this.flushAllBatches();
-      this.batchTimeout = null;
+    const timeout = setTimeout(() => {
+      this.flushBatch(canvas_id);
+      this.batchTimeouts.delete(canvas_id);
     }, this.BATCH_TIMEOUT_MS);
+
+    this.batchTimeouts.set(canvas_id, timeout);
   }
 
-  private flushBatch(canvas_id: string) {
+  private async flushBatch(canvas_id: string) {
+    const io = await this.getServer();
+
     const pixels = this.pixelBatchQueue.get(canvas_id);
     if (!pixels || pixels.length === 0) return;
 
     // 배치로 전송
-    this.server.to(canvas_id).emit('pixel_batch_update', { pixels });
+    io.to(`canvas_${canvas_id}`).emit('pixel_update', { pixels: pixels });
     this.pixelBatchQueue.set(canvas_id, []);
   }
 

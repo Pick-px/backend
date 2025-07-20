@@ -3,12 +3,18 @@ import { Job, Worker } from 'bullmq';
 import { redisConnection } from '../queues/bullmq.config';
 import { Server } from 'socket.io';
 import { getSocketServer } from '../socket/socket.manager';
+import { AppDataSource } from '../data-source';
 // Nest DI를 위한 추가 import
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { GameLogicService } from '../game/game-logic.service';
+import { Canvas } from '../canvas/entity/canvas.entity';
+
 let gameLogicService: GameLogicService | null = null;
 let nestApp: any = null;
+
+let isInitialized = false;
+
 async function getGameLogicService(): Promise<GameLogicService> {
   if (gameLogicService) return gameLogicService;
   if (!nestApp) {
@@ -28,10 +34,9 @@ interface JobData {
   endedAt?: Date;
 }
 
-async function getCanvasById(canvas_id: number): Promise<any> {
+async function getCanvasById(canvas_id: number): Promise<Canvas | null> {
   // Nest DI 없이 간단히 DB 조회 (AppDataSource 사용)
-  const { AppDataSource } = await import('../data-source');
-  const canvasRepo = AppDataSource.getRepository('Canvas');
+  const canvasRepo = AppDataSource.getRepository(Canvas);
   return await canvasRepo.findOne({ where: { id: canvas_id } });
 }
 
@@ -39,6 +44,12 @@ const alarmWorker = new Worker(
   'canvas-alarm',
   async (job: Job) => {
     const io: Server = getSocketServer(); // 소켓 서버 가져오기
+
+    if (!isInitialized) {
+      await AppDataSource.initialize();
+      isInitialized = true;
+    }
+
     const data: JobData = job.data as JobData;
     switch (job.name) {
       case '3sec-before-end':

@@ -282,10 +282,10 @@ export class AppGateway
       this.lastBroadcastCount = activeSocketCount;
       this.lastBroadcastTime = now;
 
-      console.log(
-        `[AppGateway] 실시간 접속자 수 브로드캐스트: ${activeSocketCount}명 (소켓 연결 수)`
-      );
-      console.log(`[AppGateway] 캔버스별 접속자 수:`, canvasCounts);
+      // console.log(
+      //   `[AppGateway] 실시간 접속자 수 브로드캐스트: ${activeSocketCount}명 (소켓 연결 수)`
+      // );
+      // console.log(`[AppGateway] 캔버스별 접속자 수:`, canvasCounts);
     } catch (error) {
       console.error('[AppGateway] 접속자 수 브로드캐스트 에러:', error);
     }
