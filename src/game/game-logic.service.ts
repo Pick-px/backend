@@ -10,7 +10,6 @@ import { Server, Socket } from 'socket.io';
 import { CanvasService } from '../canvas/canvas.service';
 import { GameStateService } from './game-state.service';
 import { GamePixelService } from './game-pixel.service';
-import { GameFlushService } from './game-flush.service';
 import Redis from 'ioredis';
 import { DataSource } from 'typeorm';
 
@@ -21,7 +20,6 @@ export class GameLogicService {
     private readonly canvasService: CanvasService,
     private readonly gameStateService: GameStateService,
     private readonly gamePixelService: GamePixelService,
-    private readonly gameFlushService: GameFlushService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis, // Redis 인스턴스 주입
     private readonly dataSource: DataSource // DataSource 주입
   ) {}
@@ -90,10 +88,8 @@ export class GameLogicService {
           data.canvas_id,
           pixel.owner
         );
-        await this.gameFlushService.addDirtyUser(data.canvas_id, pixel.owner);
       }
       await this.gameStateService.incrUserOwnCount(data.canvas_id, userId);
-      await this.gameFlushService.addDirtyUser(data.canvas_id, userId);
       await this.canvasService.applyDrawPixel({
         canvas_id: data.canvas_id,
         x: data.x,
@@ -101,6 +97,7 @@ export class GameLogicService {
         color: data.color,
         userId: Number(userId),
       });
+      // 픽셀 변경 시 updateQueue.add('pixel-update', {...})로 바로 큐에 추가
       server.to(`canvas_${data.canvas_id}`).emit('game_pixel_update', {
         x: data.x,
         y: data.y,
@@ -127,7 +124,7 @@ export class GameLogicService {
         data.canvas_id,
         userId
       );
-      await this.gameFlushService.addDirtyUser(data.canvas_id, userId);
+
       if (life <= 0) {
         // 사망 처리: 픽셀 자유화, dead_user 브로드캐스트
         const freedPixels = await this.gamePixelService.freeAllPixelsOfUser(
@@ -138,7 +135,6 @@ export class GameLogicService {
         await this.gameStateService.addDeadUser(data.canvas_id, userId);
         // own_count 0으로 강제 세팅
         await this.gameStateService.setUserOwnCount(data.canvas_id, userId, 0);
-        await this.gameFlushService.addDirtyUser(data.canvas_id, userId);
         server.to(`canvas_${data.canvas_id}`).emit('dead_user', {
           username: await this.getUserNameById(userId),
           pixels: freedPixels.map((p) => ({
@@ -245,7 +241,7 @@ export class GameLogicService {
     const flushKey = `flush_started:${canvasId}`;
     const isFlushStarted = await this.redis.get(flushKey);
     if (!isFlushStarted) {
-      await this.gameFlushService.flushLoop(canvasId);
+      // await this.gameFlushService.flushLoop(canvasId);
       await this.redis.setex(flushKey, 3600, '1'); // 1시간 동안 유지
     }
   }
@@ -314,13 +310,7 @@ export class GameLogicService {
   // 캔버스 종료(시간 만료) 시 강제 게임 종료 및 결과 브로드캐스트
   async forceGameEnd(canvasId: string, server?: any) {
     try {
-      // 게임 종료 직전 모든 유저 상태 DB 반영 (life 등)
-      if (
-        this.gameFlushService &&
-        typeof this.gameFlushService.flushDirtyUsers === 'function'
-      ) {
-        await this.gameFlushService.flushDirtyUsers(canvasId);
-      }
+      // dirty set 구조 제거로 인해 별도 flush 불필요, 바로 다음 로직 실행
       // 랭킹 계산 시간 측정 시작
       const rankingStart = Date.now();
       // 모든 유저, 사망자 목록 조회
@@ -354,7 +344,46 @@ export class GameLogicService {
       const rankingEnd = Date.now();
       // 게임 결과를 DB에 저장 (rank만 업데이트, userId 직접 사용)
       await this.updateGameResultsByUserId(canvasId, ranked);
-      // canvas-history 잡 추가 완전 제거 (alarm.worker/배치에서만 관리)
+      // 게임 종료 시점에 user_canvas 테이블에 유저별 통계 upsert
+      for (const user of userStats) {
+        try {
+          await this.dataSource.query(
+            `INSERT INTO user_canvas (user_id, canvas_id, own_count, try_count, joined_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (user_id, canvas_id)
+             DO UPDATE SET own_count = $3, try_count = $4`,
+            [user.userId, canvasId, user.own_count || 0, user.try_count || 0]
+          );
+        } catch (err) {
+          console.error('[forceGameEnd] user_canvas upsert 실패:', user.userId, err);
+        }
+      }
+      // 게임 종료 시 canvas-history 잡 추가 (히스토리 워커)
+      try {
+        const { historyQueue } = await import('../queues/bullmq.queue');
+        // 캔버스 정보 조회 (크기 등 필요시)
+        const canvasInfo = await this.canvasService.getCanvasById(canvasId);
+        const meta = canvasInfo?.metaData;
+        await historyQueue.add(
+          'canvas-history',
+          {
+            canvas_id: canvasId,
+            size_x: Number(meta?.sizeX),
+            size_y: Number(meta?.sizeY),
+            type: meta?.type,
+            startedAt: meta?.startedAt,
+            endedAt: meta?.endedAt,
+            created_at: meta?.createdAt,
+            updated_at: new Date(),
+          },
+          { jobId: `history-${canvasId}`, delay: 5000 }
+        );
+      } catch (e) {
+        console.error(
+          `[GameLogicService] forceGameEnd: 워커 큐에 canvas-history 잡 추가 실패: canvasId=${canvasId}`,
+          e
+        );
+      }
       // 결과 브로드캐스트
       if (server) {
         server
