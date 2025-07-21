@@ -1,5 +1,10 @@
-// bullmq.redis.ts 혹은 bullmq.client.ts 등 새 파일 생성
-import { Redis } from 'ioredis';
+import Redis from 'ioredis';
 import { redisConnection } from './bullmq.config';
 
+// 공유 Redis 클라이언트 생성
 export const redisClient = new Redis(redisConnection);
+
+// 프로세스 종료 시 연결 정리
+process.on('exit', () => {
+  redisClient.disconnect();
+});

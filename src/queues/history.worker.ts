@@ -20,8 +20,7 @@ const historyWorker = new Worker(
 
     if (!job.data) throw new Error('job.data is undefined');
 
-    const hashKey = `canvas:${canvas_id}`;
-    const redisPixels = await redisClient.hgetall(hashKey);
+    const redisPixels = await redisClient.hgetall(`canvas:${canvas_id}`);
 
     let pixelData: Array<{ x: number; y: number; color: string }> = [];
 
@@ -33,8 +32,7 @@ const historyWorker = new Worker(
 
         if (value.includes('|')) {
           // 새로운 파이프로 구분된 형태 처리
-          const [colorPart] = value.split('|')[0];
-          color = colorPart;
+          color = value.split('|')[0];
         } else {
           // 기존 color만 저장된 형태 처리 (하위 호환성)
           color = value;
