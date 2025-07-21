@@ -169,6 +169,13 @@ jobs:
             sed -i "s|name: nestjs-hpa|name: nestjs-hpa$DEPLOYMENT_SUFFIX|g" k8s-temp/hpa.yaml
             sed -i "s|name: nestjs-app|name: nestjs-app$DEPLOYMENT_SUFFIX|g" k8s-temp/hpa.yaml
             
+            # 스테이징 환경에서 워커 리소스 요구사항 감소
+            echo "🔧 스테이징 환경용 리소스 요구사항 조정..."
+            sed -i 's|memory: "2Gi"|memory: "1Gi"|g' k8s-temp/worker-deployment.yaml
+            sed -i 's|cpu: "2000m"|cpu: "500m"|g' k8s-temp/worker-deployment.yaml
+            sed -i 's|memory: "4Gi"|memory: "2Gi"|g' k8s-temp/worker-deployment.yaml
+            sed -i 's|cpu: "4000m"|cpu: "1000m"|g' k8s-temp/worker-deployment.yaml
+            
             # Skip ingress for staging
             rm -f k8s-temp/ingress.yaml
           fi
