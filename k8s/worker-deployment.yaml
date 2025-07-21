@@ -22,6 +22,8 @@ spec:
     spec:
       # 파드 종료 시 유예 기간 증가
       terminationGracePeriodSeconds: 120
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: nestjs-c5r  # 새로 생성한 노드 그룹 이름으로 변경
       containers:
         - name: nestjs-worker
           image: 863518449560.dkr.ecr.ap-northeast-2.amazonaws.com/nestjs-app:latest

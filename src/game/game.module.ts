@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { GameLogicService } from './game-logic.service';
 import { GameStateService } from './game-state.service';
 import { GamePixelService } from './game-pixel.service';
-import { GameFlushService } from './game-flush.service';
 import { GameController } from './game.controller';
 import { GameService } from './game.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,7 +23,6 @@ import { DatabaseModule } from '../database/database.module';
     GameLogicService,
     GameStateService,
     GamePixelService,
-    GameFlushService,
     GameService,
   ],
   controllers: [GameController],
@@ -32,7 +30,6 @@ import { DatabaseModule } from '../database/database.module';
     GameLogicService,
     GameStateService,
     GamePixelService,
-    GameFlushService,
     GameService,
   ],
 })

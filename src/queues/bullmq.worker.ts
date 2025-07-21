@@ -6,7 +6,9 @@ import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
+import { redisClient } from './bullmq.redis';
 import './history.worker';
+import './pixelUpdate.worker';
 
 config();
 
@@ -303,17 +305,17 @@ const forceFlushInterval = setInterval(async () => {
 // Redis 이벤트 리스너 설정
 async function setupRedisEventListeners() {
   // 픽셀 변경 이벤트 구독 (기본 Redis 사용)
-  const pixelSubscriber = new Redis(redisConnection);
-  await pixelSubscriber.subscribe('pixel:updated');
+  // const pixelSubscriber = new Redis(redisConnection);
+  // await pixelSubscriber.subscribe('pixel:updated');
 
-  pixelSubscriber.on('message', async (channel, message) => {
-    try {
-      const { canvasId, x, y, color, owner } = JSON.parse(message);
-      await addPixelToBatch(canvasId, x, y, color, owner);
-    } catch (error) {
-      console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
-    }
-  });
+  // pixelSubscriber.on('message', async (channel, message) => {
+  //   try {
+  //     const { canvasId, x, y, color, owner } = JSON.parse(message);
+  //     await addPixelToBatch(canvasId, x, y, color, owner);
+  //   } catch (error) {
+  //     console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
+  //   }
+  // });
 
   // 채팅 메시지 이벤트 구독 (기본 Redis 사용)
   const chatSubscriber = new Redis(redisConnection);
@@ -390,10 +392,11 @@ process.on('SIGINT', gracefulShutdown);
 // 메인 워커 실행
 void (async () => {
   try {
-    // console.log('[Worker] 워커 프로세스 시작...');
-    redis = new Redis(redisConnection);
+    console.log('[Worker] 워커 프로세스 시작...');
+    // redis = new Redis(redisConnection);
+    redis = redisClient;
     await redis.ping();
-    // console.log('[Worker] Redis 연결 성공');
+    console.log('[Worker] Redis 연결 성공');
     // await AppDataSource.initialize();
     await initializeDataSourceWithRetry();
     // console.log('[Worker] DataSource 초기화 완료');

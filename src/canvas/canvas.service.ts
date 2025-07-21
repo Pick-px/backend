@@ -10,7 +10,7 @@ import { DrawPixelResponse } from '../interface/DrawPixelResponse.interface';
 import { PixelInfo } from '../interface/PixelInfo.interface';
 import { CanvasHistory } from './entity/canvasHistory.entity';
 import { CanvasStrategyFactory } from './strategy/createFactory.factory';
-import { historyQueue } from '../queues/bullmq.queue';
+import { historyQueue, updateQueue } from '../queues/bullmq.queue';
 
 @Injectable()
 export class CanvasService {
@@ -52,9 +52,15 @@ export class CanvasService {
       const pipeline = this.redisClient.pipeline();
       pipeline.hset(hashKey, field, pixelData);
       pipeline.expire(hashKey, 3 * 24 * 60 * 60);
-      pipeline.sadd(`dirty_pixels:${canvas_id}`, field);
-
+      // pipeline.sadd(`dirty_pixels:${canvas_id}`, field);
       await pipeline.exec();
+      await updateQueue.add('pixel-update', {
+        canvasId: Number(canvas_id),
+        x,
+        y,
+        color,
+        owner: userId,
+      });
       return true;
     } catch (error) {
       console.error('픽셀 저장 실패:', error);
@@ -626,9 +632,12 @@ export class CanvasService {
     if (isNaN(id)) return false;
     const now = new Date();
     const result = await this.canvasRepository.update(id, { endedAt: now });
-    // ended_at을 now로 바꾼 후, 5초 delay로 historyQueue에 잡 등록
+    // ended_at을 now로 바꾼 후, 다시 읽기
     const canvas = await this.canvasRepository.findOneBy({ id });
     if (canvas) {
+      // 기존 잡 삭제
+      await historyQueue.remove(`history-${id}`);
+      // 새 잡 등록
       await historyQueue.add(
         'canvas-history',
         {
@@ -636,6 +645,7 @@ export class CanvasService {
           size_x: canvas.sizeX,
           size_y: canvas.sizeY,
           type: canvas.type,
+          endedAt: canvas.endedAt, // 최신 endedAt 사용
         },
         { jobId: `history-${id}`, delay: 5000 }
       );

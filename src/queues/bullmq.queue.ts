@@ -39,4 +39,16 @@ const alarmQueue = new Queue('canvas-alarm', {
   },
 });
 
-export { pixelQueue, historyQueue, alarmQueue };
+const updateQueue = new Queue('pixel-update', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: true,
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+  },
+});
+
+export { pixelQueue, historyQueue, alarmQueue, updateQueue };
