@@ -6,6 +6,7 @@ import { Pixel } from '../pixel/entity/pixel.entity';
 import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
+import { redisClient } from './bullmq.redis';
 import './history.worker';
 import './pixelUpdate.worker';
 
@@ -391,10 +392,11 @@ process.on('SIGINT', gracefulShutdown);
 // 메인 워커 실행
 void (async () => {
   try {
-    // console.log('[Worker] 워커 프로세스 시작...');
-    redis = new Redis(redisConnection);
+    console.log('[Worker] 워커 프로세스 시작...');
+    // redis = new Redis(redisConnection);
+    redis = redisClient;
     await redis.ping();
-    // console.log('[Worker] Redis 연결 성공');
+    console.log('[Worker] Redis 연결 성공');
     // await AppDataSource.initialize();
     await initializeDataSourceWithRetry();
     // console.log('[Worker] DataSource 초기화 완료');

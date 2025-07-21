@@ -12,7 +12,9 @@ export async function generatorPixelToImg(
   height: number,
   width: number
 ): Promise<Buffer> {
-  const canvas = createCanvas(width, height);
+  console.log('width: ', width);
+  console.log('height: ', height);
+  const canvas = createCanvas(height, width);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
