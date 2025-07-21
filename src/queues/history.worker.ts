@@ -14,6 +14,8 @@ const historyWorker = new Worker(
   'canvas-history',
   async (job: Job) => {
     const { canvas_id, size_x, size_y, type } = job.data;
+    const width = Number(size_x);
+    const height = Number(size_y);
 
     if (!job.data) throw new Error('job.data is undefined');
 
@@ -22,7 +24,7 @@ const historyWorker = new Worker(
         'select x, y, color from pixels where canvas_id = $1::INTEGER',
         [canvas_id]
       );
-    const buffer = await generatorPixelToImg(pixelData, size_x, size_y);
+    const buffer = await generatorPixelToImg(pixelData, width, height);
     const contentType = 'image/png';
     const key = `history/${canvas_id}/${randomUUID()}.png`;
     await uploadBufferToS3(buffer, key, contentType);

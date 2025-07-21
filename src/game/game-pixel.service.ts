@@ -55,7 +55,6 @@ export class GamePixelService {
         const pixelData = `#000000|`; // owner 없음
 
         pipeline.hset(hashKey, field, pixelData);
-        pipeline.sadd(`dirty_pixels:${canvasId}`, field);
 
         freedPixels.push({ x: pixel.x, y: pixel.y, color: '#000000' });
       }
