@@ -84,7 +84,6 @@ export class AppGateway
       // 모든 이벤트에 대한 디버그 리스너 추가
       server.on('connection', (socket) => {
         console.log(`[AppGateway] 클라이언트 연결됨: ${socket.id}`);
-
         // 모든 이벤트 로깅
         // socket.onAny((eventName, ...args) => {
         //   console.log(

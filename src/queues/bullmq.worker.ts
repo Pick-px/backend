@@ -7,6 +7,7 @@ import Redis from 'ioredis';
 import { Chat } from '../group/entity/chat.entity';
 import { PixelInfo } from '../interface/PixelInfo.interface';
 import './history.worker';
+import './pixelUpdate.worker';
 
 config();
 
@@ -303,17 +304,17 @@ const forceFlushInterval = setInterval(async () => {
 // Redis 이벤트 리스너 설정
 async function setupRedisEventListeners() {
   // 픽셀 변경 이벤트 구독 (기본 Redis 사용)
-  const pixelSubscriber = new Redis(redisConnection);
-  await pixelSubscriber.subscribe('pixel:updated');
+  // const pixelSubscriber = new Redis(redisConnection);
+  // await pixelSubscriber.subscribe('pixel:updated');
 
-  pixelSubscriber.on('message', async (channel, message) => {
-    try {
-      const { canvasId, x, y, color, owner } = JSON.parse(message);
-      await addPixelToBatch(canvasId, x, y, color, owner);
-    } catch (error) {
-      console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
-    }
-  });
+  // pixelSubscriber.on('message', async (channel, message) => {
+  //   try {
+  //     const { canvasId, x, y, color, owner } = JSON.parse(message);
+  //     await addPixelToBatch(canvasId, x, y, color, owner);
+  //   } catch (error) {
+  //     console.error('[Worker] 픽셀 이벤트 처리 에러:', error);
+  //   }
+  // });
 
   // 채팅 메시지 이벤트 구독 (기본 Redis 사용)
   const chatSubscriber = new Redis(redisConnection);

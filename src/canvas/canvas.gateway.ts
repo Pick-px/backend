@@ -143,19 +143,27 @@ export class CanvasGateway implements OnGatewayInit {
         return;
       }
 
-      // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
-      await this.redis.publish(
-        'pixel:updated',
-        JSON.stringify({
-          canvasId: Number(pixel.canvas_id),
-          x: pixel.x,
-          y: pixel.y,
-          color: pixel.color,
-          owner: userId,
-        })
-      );
+      // this.broadcastService.addPixelToBatch(
+      //   {
+      //     canvas_id: pixel.canvas_id,
+      //     x: pixel.x,
+      //     y: pixel.y,
+      //     color: pixel.color,
+      //   },
+      //   true
+      // );
 
-      console.log('픽셀 그리기 성공:', pixel);
+      // // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
+      // await this.redis.publish(
+      //   'pixel:updated',
+      //   JSON.stringify({
+      //     canvasId: Number(pixel.canvas_id),
+      //     x: pixel.x,
+      //     y: pixel.y,
+      //     color: pixel.color,
+      //     owner: userId,
+      //   })
+      // );
 
       // 비동기 브로드캐스트 (응답 속도 향상)
       this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
@@ -167,12 +175,6 @@ export class CanvasGateway implements OnGatewayInit {
           },
         ],
       });
-      // this.broadcastService.addPixelToBatch({
-      //   canvas_id: pixel.canvas_id,
-      //   x: pixel.x,
-      //   y: pixel.y,
-      //   color: pixel.color,
-      // });
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
       client.emit('pixel_error', { message: '픽셀 그리기 실패' });
@@ -264,17 +266,27 @@ export class CanvasGateway implements OnGatewayInit {
         return;
       }
 
-      // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
-      await this.redis.publish(
-        'pixel:updated',
-        JSON.stringify({
-          canvasId: Number(pixel.canvas_id),
+      this.broadcastService.addPixelToBatch(
+        {
+          canvas_id: pixel.canvas_id,
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
-          owner: userId,
-        })
+        },
+        false
       );
+
+      // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
+      // await this.redis.publish(
+      //   'pixel:updated',
+      //   JSON.stringify({
+      //     canvasId: Number(pixel.canvas_id),
+      //     x: pixel.x,
+      //     y: pixel.y,
+      //     color: pixel.color,
+      //     owner: userId,
+      //   })
+      // );
 
       // 비동기 브로드캐스트 (응답 속도 향상)
       // setImmediate(() => {
@@ -284,13 +296,6 @@ export class CanvasGateway implements OnGatewayInit {
       //     color: pixel.color,
       //   });
       // });
-
-      this.broadcastService.addPixelToBatch({
-        canvas_id: pixel.canvas_id,
-        x: pixel.x,
-        y: pixel.y,
-        color: pixel.color,
-      });
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
     }
