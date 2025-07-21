@@ -4,6 +4,7 @@ import { AppDataSource } from '../data-source';
 import { generatorPixelToImg } from '../util/imageGenerator.util';
 import { uploadBufferToS3 } from '../util/s3UploadFile.util';
 import { randomUUID } from 'crypto';
+import { redisClient } from './bullmq.redis';
 import { redisConnection } from './bullmq.config';
 import { CanvasHistory } from '../canvas/entity/canvasHistory.entity';
 
@@ -19,11 +20,34 @@ const historyWorker = new Worker(
 
     if (!job.data) throw new Error('job.data is undefined');
 
-    const pixelData: { x: number; y: number; color: string }[] =
-      await pixelRepository.query(
+    const hashKey = `canvas:${canvas_id}`;
+    const redisPixels = await redisClient.hgetall(hashKey);
+
+    let pixelData: Array<{ x: number; y: number; color: string }> = [];
+
+    if (Object.keys(redisPixels).length > 0) {
+      for (const field in redisPixels) {
+        const [x, y] = field.split(':').map(Number);
+        const value = redisPixels[field];
+        let color: string;
+
+        if (value.includes('|')) {
+          // 새로운 파이프로 구분된 형태 처리
+          const [colorPart] = value.split('|')[0];
+          color = colorPart;
+        } else {
+          // 기존 color만 저장된 형태 처리 (하위 호환성)
+          color = value;
+        }
+        pixelData.push({ x, y, color });
+      }
+    } else {
+      pixelData = await pixelRepository.query(
         'select x, y, color from pixels where canvas_id = $1::INTEGER',
         [canvas_id]
       );
+    }
+
     const buffer = await generatorPixelToImg(pixelData, width, height);
     const contentType = 'image/png';
     const key = `history/${canvas_id}/${randomUUID()}.png`;
