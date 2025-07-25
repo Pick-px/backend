@@ -11,6 +11,7 @@ import { CanvasService } from '../canvas/canvas.service';
 import { GameStateService } from './game-state.service';
 import { GamePixelService } from './game-pixel.service';
 import Redis from 'ioredis';
+import { Canvas } from '../canvas/entity/canvas.entity';
 import { DataSource } from 'typeorm';
 
 @Injectable()
@@ -45,6 +46,12 @@ export class GameLogicService {
     // 캔버스 종료 시간 체크 (색칠 차단)
     const canvasInfo = await this.canvasService.getCanvasById(data.canvas_id);
     const now = new Date();
+
+    if (canvasInfo?.metaData?.type != 'game_calculation') {
+      client.emit('game_error', {
+        message: '게임 캔버스가 아닙니다. 다시 시도하세요',
+      });
+    }
     if (canvasInfo?.metaData?.endedAt && now > canvasInfo.metaData.endedAt) {
       console.warn(
         `[handleSendResult] 종료된 캔버스에 색칠 시도 차단: userId=${userId}, canvas_id=${data.canvas_id}`
@@ -104,13 +111,13 @@ export class GameLogicService {
         color: data.color,
       });
       // 정답 처리 후에도 종료 시간 체크 및 강제 종료
-      const canvasInfoAfter = await this.canvasService.getCanvasById(
-        data.canvas_id
-      );
+      // const canvasInfoAfter = await this.canvasService.getCanvasById(
+      //   data.canvas_id
+      // );
       const nowAfter = new Date();
       if (
-        canvasInfoAfter?.metaData?.endedAt &&
-        nowAfter > canvasInfoAfter.metaData.endedAt
+        canvasInfo?.metaData?.endedAt &&
+        nowAfter > canvasInfo.metaData.endedAt
       ) {
         console.warn(
           `[handleSendResult] 정답 처리 후 종료 시간 만료 감지, forceGameEnd 호출: canvas_id=${data.canvas_id}`
@@ -355,7 +362,11 @@ export class GameLogicService {
             [user.userId, canvasId, user.own_count || 0, user.try_count || 0]
           );
         } catch (err) {
-          console.error('[forceGameEnd] user_canvas upsert 실패:', user.userId, err);
+          console.error(
+            '[forceGameEnd] user_canvas upsert 실패:',
+            user.userId,
+            err
+          );
         }
       }
       // 게임 종료 시 canvas-history 잡 추가 (히스토리 워커)
