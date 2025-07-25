@@ -1,10 +1,10 @@
 import { Controller, ForbiddenException, Post, Req, Res } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+// import { ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SignedCookies } from '../interface/SignedCookies.interface';
 
-@ApiTags('auth')
+// @ApiTags('auth')
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

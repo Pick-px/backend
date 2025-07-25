@@ -11,25 +11,25 @@ import {
 } from '@nestjs/common';
 import { CanvasService } from './canvas.service';
 import { createCanvasDto } from './dto/create_canvas_dto.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiBadRequestResponse,
-  ApiQuery,
-  ApiResponse,
-} from '@nestjs/swagger';
+// import {
+//   ApiTags,
+//   ApiOperation,
+//   ApiOkResponse,
+//   ApiBadRequestResponse,
+//   ApiQuery,
+//   ApiResponse,
+// } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as zlib from 'zlib';
 
-@ApiTags('canvas')
+// @ApiTags('canvas')
 @Controller('api/canvas')
 export class CanvasController {
   constructor(private readonly canvasService: CanvasService) {}
 
-  @ApiOperation({ summary: 'Create Canvas' })
-  @ApiOkResponse({ description: '캔버스 만들기 성공' })
-  @ApiBadRequestResponse({ description: '' })
+  // @ApiOperation({ summary: 'Create Canvas' })
+  // @ApiOkResponse({ description: '캔버스 만들기 성공' })
+  // @ApiBadRequestResponse({ description: '' })
   @Post()
   async create(@Body() createCanvasDto: createCanvasDto) {
     try {
@@ -40,47 +40,47 @@ export class CanvasController {
     }
   }
 
-  @ApiTags('pixels')
-  @ApiOperation({
-    summary: '특정 캔버스의 모든 픽셀 데이터 조회',
-    description:
-      'canvas_id로 해당 캔버스의 전체 픽셀 데이터를 압축하여 반환합니다.',
-  })
-  @ApiQuery({
-    name: 'canvas_id',
-    required: true,
-    description: '조회할 캔버스 ID',
-  })
-  @ApiResponse({
-    status: 200,
-    description: `
-      이 API는 gzip으로 압축된 JSON을 반환합니다.
-      응답 헤더에 Content-Encoding: gzip이 포함됩니다.
-      아래 예시는 압축 해제 후의 JSON 구조입니다.
-    `,
-    schema: {
-      example: {
-        success: true,
-        data: {
-          canvas_id: '1',
-          title: '이벤트 캔버스',
-          type: 'event',
-          startedAt: '2024-07-15T00:00:00.000Z',
-          endedAt: '2024-08-01T00:00:00.000Z',
-          pixels: [
-            { x: 100, y: 200, color: '#ff0000', owner: 123 },
-            { x: 101, y: 201, color: '#00ff00', owner: null },
-          ],
-          compression: 'gzip',
-          totalPixels: 5000,
-          canvasSize: {
-            width: 1000,
-            height: 1000,
-          },
-        },
-      },
-    },
-  })
+  // @ApiTags('pixels')
+  // @ApiOperation({
+  //   summary: '특정 캔버스의 모든 픽셀 데이터 조회',
+  //   description:
+  //     'canvas_id로 해당 캔버스의 전체 픽셀 데이터를 압축하여 반환합니다.',
+  // })
+  // @ApiQuery({
+  //   name: 'canvas_id',
+  //   required: true,
+  //   description: '조회할 캔버스 ID',
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: `
+  //     이 API는 gzip으로 압축된 JSON을 반환합니다.
+  //     응답 헤더에 Content-Encoding: gzip이 포함됩니다.
+  //     아래 예시는 압축 해제 후의 JSON 구조입니다.
+  //   `,
+  //   schema: {
+  //     example: {
+  //       success: true,
+  //       data: {
+  //         canvas_id: '1',
+  //         title: '이벤트 캔버스',
+  //         type: 'event',
+  //         startedAt: '2024-07-15T00:00:00.000Z',
+  //         endedAt: '2024-08-01T00:00:00.000Z',
+  //         pixels: [
+  //           { x: 100, y: 200, color: '#ff0000', owner: 123 },
+  //           { x: 101, y: 201, color: '#00ff00', owner: null },
+  //         ],
+  //         compression: 'gzip',
+  //         totalPixels: 5000,
+  //         canvasSize: {
+  //           width: 1000,
+  //           height: 1000,
+  //         },
+  //       },
+  //     },
+  //   },
+  // })
   @Get('pixels')
   async getAllPixels(
     @Res() res: Response,
@@ -220,11 +220,11 @@ export class CanvasController {
     }
   }
 
-  @ApiOperation({
-    summary: '캔버스 리스트',
-    description:
-      'status(active/inactive)에 따른 캔버스 리스트 반환 (active: 종료되지 않은 모든 캔버스, inactive: 종료된 캔버스)',
-  })
+  // @ApiOperation({
+  //   summary: '캔버스 리스트',
+  //   description:
+  //     'status(active/inactive)에 따른 캔버스 리스트 반환 (active: 종료되지 않은 모든 캔버스, inactive: 종료된 캔버스)',
+  // })
   @Get('list')
   async getCanvasList(@Query('status') status: string) {
     try {
