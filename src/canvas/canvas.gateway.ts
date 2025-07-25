@@ -263,13 +263,12 @@ export class CanvasGateway implements OnGatewayInit {
         return;
       }
 
-      this.broadcastService.addPixelToBatch(
-        {
-          canvas_id: pixel.canvas_id,
-          x: pixel.x,
-          y: pixel.y,
-          color: pixel.color,
-        });
+      this.broadcastService.addPixelToBatch({
+        canvas_id: pixel.canvas_id,
+        x: pixel.x,
+        y: pixel.y,
+        color: pixel.color,
+      });
 
       // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
       // await this.redis.publish(
@@ -308,12 +307,8 @@ export class CanvasGateway implements OnGatewayInit {
     },
     @ConnectedSocket() client: Socket
   ) {
-    const canvasType = await this.canvasService.getCanvasType(data.canvas_id);
-
-    if (canvasType === 'game_calculation') {
-      await this.gameLogicService.handleSendResult(data, client, this.server);
-      return;
-    }
+    await this.gameLogicService.handleSendResult(data, client, this.server);
+    return;
     // (일반/이벤트 캔버스에서는 무시)
   }
 }
