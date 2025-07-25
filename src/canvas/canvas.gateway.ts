@@ -76,7 +76,10 @@ export class CanvasGateway implements OnGatewayInit {
     pubClient: Redis,
     subClient: Redis
   ) {
-    server.adapter(createAdapter(pubClient, subClient));
+    server.adapter(createAdapter(pubClient, subClient, {
+      compression: true,
+      requestsTimeout: 5000
+    }));
   }
 
   // Redis 세션에서 사용자 id만 가져오기 (owner 용)
@@ -165,7 +168,7 @@ export class CanvasGateway implements OnGatewayInit {
       //   })
       // );
 
-      // 비동기 브로드캐스트 (응답 속도 향상)
+      // Redis adapter를 통한 멀티서버 브로드캐스트 (자기 자신 포함 필수)
       this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
         pixels: [
           {

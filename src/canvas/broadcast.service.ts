@@ -13,7 +13,7 @@ interface PixelUpdate {
 export class BroadcastService implements OnModuleInit {
   private pixelBatchQueue = new Map<string, PixelUpdate[]>();
   private batchTimeout: NodeJS.Timeout | null = null;
-  private readonly BATCH_SIZE = 50;
+  private readonly BATCH_SIZE = 100;
   private readonly BATCH_TIMEOUT_MS = 16.67; // 60fps (1000ms / 60)
   private server: Server | null = null;
 
@@ -80,10 +80,8 @@ export class BroadcastService implements OnModuleInit {
     const pixels = this.pixelBatchQueue.get(canvas_id);
     if (!pixels || pixels.length === 0) return;
 
-    // 배치로 전송
-    this.server
-      .to(`canvas_${canvas_id}`)
-      .emit('pixel_update', { pixels: pixels });
+    // Redis adapter를 통한 멀티서버 브로드캐스트
+    this.server.to(`canvas_${canvas_id}`).emit('pixel_update', { pixels: pixels });
     this.pixelBatchQueue.set(canvas_id, []);
   }
 
