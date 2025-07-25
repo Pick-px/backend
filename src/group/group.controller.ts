@@ -12,15 +12,15 @@ import {
   Delete,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
-import {
-  ApiOkResponse,
-  ApiTags,
-  ApiOperation,
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiQuery,
-  ApiResponse,
-} from '@nestjs/swagger';
+// import {
+//   ApiOkResponse,
+//   ApiTags,
+//   ApiOperation,
+//   ApiBadRequestResponse,
+//   ApiBearerAuth,
+//   ApiQuery,
+//   ApiResponse,
+// } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -33,7 +33,7 @@ import { UserService } from '../user/user.service';
 import { AuthRequest } from '../interface/AuthRequest.interface';
 import { CreatePreSignedUrl } from './dto/create_url.dto';
 
-@ApiTags('Group')
+// 모든 Swagger 데코레이터(@ApiTags 등) 주석처리
 @Controller('api/group')
 export class GroupController {
   constructor(
@@ -43,17 +43,17 @@ export class GroupController {
 
   // 캔버스 ID로 해당 캔버스의 모든 그룹 ID 배열을 반환
   @Get('by-canvas')
-  @ApiOperation({
-    summary: '캔버스 ID로 그룹 ID 조회',
-    description:
-      '캔버스 ID를 받아 해당 캔버스의 모든 그룹 ID 배열을 반환합니다.',
-  })
-  @ApiQuery({ name: 'canvas_id', required: true, description: '캔버스 ID' })
-  @ApiOkResponse({
-    description: '캔버스 ID로 그룹 ID 조회 성공',
-    schema: { example: { group_ids: [1, 2, 3] } },
-  })
-  @ApiTags('Group')
+  // @ApiOperation({
+  //   summary: '캔버스 ID로 그룹 ID 조회',
+  //   description:
+  //     '캔버스 ID를 받아 해당 캔버스의 모든 그룹 ID 배열을 반환합니다.',
+  // })
+  // @ApiQuery({ name: 'canvas_id', required: true, description: '캔버스 ID' })
+  // @ApiOkResponse({
+  //   description: '캔버스 ID로 그룹 ID 조회 성공',
+  //   schema: { example: { group_ids: [1, 2, 3] } },
+  // })
+  // @ApiTags('Group')
   async getGroupIdByCanvas(
     @Query('canvas_id') canvasId: string // 파라미터명도 통일
   ) {
@@ -70,28 +70,28 @@ export class GroupController {
   // 채팅 초기 데이터(유저 참여 그룹, 전체 채팅방 메시지 등)를 반환
   @Get('init/chat')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: '채팅 초기 데이터 조회',
-    description:
-      'canvas_id로 유저가 참여중인 그룹 리스트와 전체 채팅방의 최신 메시지(50개)를 반환합니다.',
-  })
-  @ApiQuery({ name: 'canvas_id', required: true, description: '캔버스 ID' })
-  @ApiResponse({
-    status: 200,
-    description: '성공',
-    type: ChatInitResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: '인증 실패',
-    schema: { example: { success: false, error: 'Authentication required' } },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Default group not found',
-    schema: { example: { success: false, error: 'Default group not found' } },
-  })
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: '채팅 초기 데이터 조회',
+  //   description:
+  //     'canvas_id로 유저가 참여중인 그룹 리스트와 전체 채팅방의 최신 메시지(50개)를 반환합니다.',
+  // })
+  // @ApiQuery({ name: 'canvas_id', required: true, description: '캔버스 ID' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: '성공',
+  //   type: ChatInitResponseDto,
+  // })
+  // @ApiResponse({
+  //   status: 401,
+  //   description: '인증 실패',
+  //   schema: { example: { success: false, error: 'Authentication required' } },
+  // })
+  // @ApiResponse({
+  //   status: 404,
+  //   description: 'Default group not found',
+  //   schema: { example: { success: false, error: 'Default group not found' } },
+  // })
   async chatInit(@Req() req, @Query('canvas_id') canvasId: string) {
     try {
       if (!canvasId) {
@@ -185,43 +185,43 @@ export class GroupController {
   // 특정 그룹의 채팅 메시지 기록을 반환 (권한/인증 체크)
   @Get('chat')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: '특정 그룹의 채팅 메시지 조회',
-    description:
-      'group_id와 limit을 쿼리로 받아 해당 그룹의 최신 채팅 메시지 기록을 반환합니다.',
-  })
-  @ApiQuery({ name: 'group_id', required: true, description: '조회할 그룹 ID' })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: '불러올 메시지 개수(기본 50)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: '성공',
-    type: ChatHistoryResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: '인증 실패',
-    schema: { example: { success: false, error: 'Authentication required' } },
-  })
-  @ApiResponse({
-    status: 403,
-    description: '권한 없음',
-    schema: {
-      example: {
-        success: false,
-        error: 'You do not have permission to access this chat',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: '그룹 없음',
-    schema: { example: { success: false, error: 'Group not found' } },
-  })
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: '특정 그룹의 채팅 메시지 조회',
+  //   description:
+  //     'group_id와 limit을 쿼리로 받아 해당 그룹의 최신 채팅 메시지 기록을 반환합니다.',
+  // })
+  // @ApiQuery({ name: 'group_id', required: true, description: '조회할 그룹 ID' })
+  // @ApiQuery({
+  //   name: 'limit',
+  //   required: false,
+  //   description: '불러올 메시지 개수(기본 50)',
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: '성공',
+  //   type: ChatHistoryResponseDto,
+  // })
+  // @ApiResponse({
+  //   status: 401,
+  //   description: '인증 실패',
+  //   schema: { example: { success: false, error: 'Authentication required' } },
+  // })
+  // @ApiResponse({
+  //   status: 403,
+  //   description: '권한 없음',
+  //   schema: {
+  //     example: {
+  //       success: false,
+  //       error: 'You do not have permission to access this chat',
+  //     },
+  //   },
+  // })
+  // @ApiResponse({
+  //   status: 404,
+  //   description: '그룹 없음',
+  //   schema: { example: { success: false, error: 'Group not found' } },
+  // })
   async getChatHistory(
     @Req() req,
     @Query('group_id') groupId: string,
@@ -303,14 +303,14 @@ export class GroupController {
 
   @Post('create')
   @HttpCode(200) // Set the HTTP status code to 200
-  @ApiOperation({ summary: '그룹 생성 api' })
-  @ApiOkResponse({
-    description: '그룹 생성 성공 시 ',
-    type: BaseResponseDto,
-  })
-  @ApiBadRequestResponse({})
+  // @ApiOperation({ summary: '그룹 생성 api' })
+  // @ApiOkResponse({
+  //   description: '그룹 생성 성공 시 ',
+  //   type: BaseResponseDto,
+  // })
+  // @ApiBadRequestResponse({})
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  // @ApiBearerAuth()
   async createGroup(@Req() req: AuthRequest, @Body() data: CreateGroupDto) {
     const _id = req.user._id;
 
@@ -339,12 +339,12 @@ export class GroupController {
   @Get('list')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '그룹 목록 조회 api' })
-  @ApiOkResponse({
-    description: '그룹 목록 조회 성공 시 ',
-    type: BaseResponseDto,
-  })
+  // @ApiBearerAuth()
+  // @ApiOperation({ summary: '그룹 목록 조회 api' })
+  // @ApiOkResponse({
+  //   description: '그룹 목록 조회 성공 시 ',
+  //   type: BaseResponseDto,
+  // })
   async getGroupList(
     @Req() req: AuthRequest,
     @Query('canvas_id') canvas_id: string
@@ -374,13 +374,13 @@ export class GroupController {
   @Post('join')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '그룹 입장 api' })
-  @ApiOkResponse({
-    description: '그룹 입장 성공 시 ',
-    type: BaseResponseDto,
-  })
-  @ApiBadRequestResponse({})
-  @ApiBearerAuth()
+  // @ApiOperation({ summary: '그룹 입장 api' })
+  // @ApiOkResponse({
+  //   description: '그룹 입장 성공 시 ',
+  //   type: BaseResponseDto,
+  // })
+  // @ApiBadRequestResponse({})
+  // @ApiBearerAuth()
   async joinGroup(@Req() req: AuthRequest, @Body() data: GroupIdDto) {
     const _id = req.user._id;
     const { group_id, canvas_id } = data;
@@ -412,13 +412,13 @@ export class GroupController {
   @Delete('quit')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '그룹 탈퇴 api' })
-  @ApiOkResponse({
-    description: '그룹 탈퇴 성공 시 ',
-    type: BaseResponseDto,
-  })
-  @ApiBadRequestResponse({})
-  @ApiBearerAuth()
+  // @ApiOperation({ summary: '그룹 탈퇴 api' })
+  // @ApiOkResponse({
+  //   description: '그룹 탈퇴 성공 시 ',
+  //   type: BaseResponseDto,
+  // })
+  // @ApiBadRequestResponse({})
+  // @ApiBearerAuth()
   async quitGroup(@Req() req: AuthRequest, @Body() data: QuitGroupDto) {
     const _id = req.user._id;
     const { group_id } = data;
@@ -445,13 +445,13 @@ export class GroupController {
   @Get('search')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '그룹 검색 api' })
-  @ApiOkResponse({
-    description: '그룹 검색 성공 시 ',
-    type: BaseResponseDto,
-  })
-  @ApiBadRequestResponse({})
-  @ApiBearerAuth()
+  // @ApiOperation({ summary: '그룹 검색 api' })
+  // @ApiOkResponse({
+  //   description: '그룹 검색 성공 시 ',
+  //   type: BaseResponseDto,
+  // })
+  // @ApiBadRequestResponse({})
+  // @ApiBearerAuth()
   async searchGroup(
     @Req() req: AuthRequest,
     @Query('groupName') groupName: string,
@@ -485,13 +485,13 @@ export class GroupController {
 
   @UseGuards(JwtAuthGuard)
   @Post('upload')
-  @ApiOperation({ summary: 'pre-signed URL 발급 API' })
-  @ApiOkResponse({
-    description: 'pre signed url 발급 성공',
-    type: BaseResponseDto,
-  })
-  @ApiBadRequestResponse({})
-  @ApiBearerAuth()
+  // @ApiOperation({ summary: 'pre-signed URL 발급 API' })
+  // @ApiOkResponse({
+  //   description: 'pre signed url 발급 성공',
+  //   type: BaseResponseDto,
+  // })
+  // @ApiBadRequestResponse({})
+  // @ApiBearerAuth()
   async uploadOverlayImg(
     @Req() req: AuthRequest,
     @Body() createUrl: CreatePreSignedUrl

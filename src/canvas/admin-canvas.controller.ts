@@ -3,11 +3,11 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AdminGuard } from '../auth/admin.guard';
 import { CanvasService } from './canvas.service';
 import { CanvasGateway } from './canvas.gateway';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiResponse } from '@nestjs/swagger';
+// import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { GameLogicService } from '../game/game-logic.service';
 
-@ApiTags('admin/canvas')
-@ApiBearerAuth()
+// @ApiTags('admin/canvas')
+// @ApiBearerAuth()
 @Controller('api/admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminCanvasController {
@@ -18,8 +18,8 @@ export class AdminCanvasController {
   ) {}
 
   @Get('canvas/list')
-  @ApiOperation({ summary: '전체 캔버스 리스트 조회', description: '관리자 권한으로 전체 캔버스 리스트를 조회합니다.' })
-  @ApiResponse({ status: 200, description: '캔버스 리스트', schema: { example: [ { id: 1, title: '캔버스 제목', type: 'public', created_at: '2024-06-01T12:00:00Z', started_at: '2024-06-01T12:00:00Z', ended_at: null, size_x: 100, size_y: 100 } ] } })
+  // @ApiOperation({ summary: '전체 캔버스 리스트 조회', description: '관리자 권한으로 전체 캔버스 리스트를 조회합니다.' })
+  // @ApiResponse({ status: 200, description: '캔버스 리스트', schema: { example: [ { id: 1, title: '캔버스 제목', type: 'public', created_at: '2024-06-01T12:00:00Z', started_at: '2024-06-01T12:00:00Z', ended_at: null, size_x: 100, size_y: 100 } ] } })
   async getCanvasList() {
     const result = await this.canvasService.getCanvasList('all');
     return result;
@@ -27,9 +27,9 @@ export class AdminCanvasController {
 
   @Post('canvas')
   @HttpCode(201)
-  @ApiOperation({ summary: '캔버스 생성', description: '관리자 권한으로 새 캔버스를 생성합니다.' })
-  @ApiBody({ schema: { example: { title: '캔버스 제목', type: 'public', size_x: 100, size_y: 100, started_at: '2025-07-18T19:21:17Z', ended_at: '2025-07-18T19:24:17Z' } } })
-  @ApiResponse({ status: 201, description: '생성된 캔버스 정보', schema: { example: { id: 1, title: '캔버스 제목', type: 'public', created_at: '2024-06-01T12:00:00Z', started_at: '2024-06-01T12:00:00Z', ended_at: null, size_x: 100, size_y: 100 } } })
+  // @ApiOperation({ summary: '캔버스 생성', description: '관리자 권한으로 새 캔버스를 생성합니다.' })
+  // @ApiBody({ schema: { example: { title: '캔버스 제목', type: 'public', size_x: 100, size_y: 100, started_at: '2025-07-18T19:21:17Z', ended_at: '2025-07-18T19:24:17Z' } } })
+  // @ApiResponse({ status: 201, description: '생성된 캔버스 정보', schema: { example: { id: 1, title: '캔버스 제목', type: 'public', created_at: '2024-06-01T12:00:00Z', started_at: '2024-06-01T12:00:00Z', ended_at: null, size_x: 100, size_y: 100 } } })
   async createCanvas(@Body() body) {
     const dto = {
       title: body.title,
@@ -54,9 +54,9 @@ export class AdminCanvasController {
   }
 
   @Delete('canvas')
-  @ApiOperation({ summary: '캔버스 삭제', description: '관리자 권한으로 캔버스 및 연관 데이터를 하드 딜리트합니다.' })
-  @ApiBody({ schema: { example: { canvasId: 1 } } })
-  @ApiResponse({ status: 200, description: '삭제 성공', schema: { example: { success: true, message: '캔버스 및 연관 데이터가 삭제되었습니다.' } } })
+  // @ApiOperation({ summary: '캔버스 삭제', description: '관리자 권한으로 캔버스 및 연관 데이터를 하드 딜리트합니다.' })
+  // @ApiBody({ schema: { example: { canvasId: 1 } } })
+  // @ApiResponse({ status: 200, description: '삭제 성공', schema: { example: { success: true, message: '캔버스 및 연관 데이터가 삭제되었습니다.' } } })
   async deleteCanvas(@Body() body) {
     const canvasId = body.canvasId;
     if (!canvasId) throw new BadRequestException('canvasId 필요');
@@ -70,9 +70,9 @@ export class AdminCanvasController {
   }
 
   @Post('force_end')
-  @ApiOperation({ summary: '게임 캔버스 강제 종료', description: '관리자 권한으로 게임 캔버스를 강제 종료합니다.' })
-  @ApiBody({ schema: { example: { canvasId: 1 } } })
-  @ApiResponse({ status: 200, description: '강제 종료 성공', schema: { example: { success: true, message: '게임 캔버스가 강제 종료되었습니다.' } } })
+  // @ApiOperation({ summary: '게임 캔버스 강제 종료', description: '관리자 권한으로 게임 캔버스를 강제 종료합니다.' })
+  // @ApiBody({ schema: { example: { canvasId: 1 } } })
+  // @ApiResponse({ status: 200, description: '강제 종료 성공', schema: { example: { success: true, message: '게임 캔버스가 강제 종료되었습니다.' } } })
   async forceEndCanvas(@Body() body) {
     const canvasId = body.canvasId;
     if (!canvasId) throw new BadRequestException('canvasId 필요');

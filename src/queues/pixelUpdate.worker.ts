@@ -5,6 +5,9 @@ import { redisConnection } from './bullmq.config';
 const PIXEL_BATCH_SIZE = 200;
 const CHUNK_SIZE = 100; // 대량 업데이트 시 청크 처리
 const BATCH_TIMEOUT_MS = 1000;
+const COUNT_BATCH_SIZE = 500;
+let isFlushingCount = false;
+let isFlushingPixel = false;
 
 interface PixelUpdate {
   canvasId: number;
@@ -16,6 +19,7 @@ interface PixelUpdate {
 
 // 데이터 저장 구조
 const pixelUpdateMap = new Map<string, PixelUpdate>();
+const countUpdateMap = new Map<string, number>();
 
 // BullMQ 워커 설정
 const updateWorker = new Worker(
@@ -23,13 +27,39 @@ const updateWorker = new Worker(
   async (job: Job) => {
     const data: PixelUpdate = job.data as PixelUpdate;
 
+    if (!data) {
+      console.error('Invalid job data');
+      return;
+    }
+
     // 픽셀 데이터 큐에 추가 (중복 자동 제거)
-    const key = `${data.canvasId}:${data.x}:${data.y}`;
+    let key = `${data.canvasId}:${data.x}:${data.y}`;
     pixelUpdateMap.set(key, data);
 
+    key = `${data.owner}:${data.canvasId}`;
+    if (countUpdateMap.has(key)) {
+      countUpdateMap.set(key, countUpdateMap.get(key)! + 1);
+    } else {
+      countUpdateMap.set(key, 1);
+    }
+
+    if (countUpdateMap.size >= COUNT_BATCH_SIZE && !isFlushingCount) {
+      isFlushingCount = true;
+      flushCountToDb()
+        .catch((err) => console.error('[CountUpdate] 처리 실패:', err))
+        .finally(() => {
+          isFlushingCount = false;
+        });
+    }
+
     // 배치 크기 도달 시 즉시 flush
-    if (pixelUpdateMap.size >= PIXEL_BATCH_SIZE) {
-      await flushPixelToDb();
+    if (pixelUpdateMap.size >= PIXEL_BATCH_SIZE && !isFlushingPixel) {
+      isFlushingPixel = true;
+      flushPixelToDb()
+        .catch((err) => console.error('[PixelUpdate] 처리 실패:', err))
+        .finally(() => {
+          isFlushingPixel = false;
+        });
     }
   },
   {
@@ -43,6 +73,60 @@ const updateWorker = new Worker(
     removeOnFail: { count: 50 },
   }
 );
+
+async function flushCountToDb() {
+  if (countUpdateMap.size === 0) return;
+
+  // 현재 맵의 스냅샷 생성
+  const countsToProcess = Array.from(countUpdateMap.entries());
+  countUpdateMap.clear();
+
+  // userId별로 그룹화
+  const userGroups = new Map<
+    number,
+    Array<{ canvasId: number; count: number }>
+  >();
+
+  for (const [countKey, count] of countsToProcess) {
+    const [userId, canvasId] = countKey.split(':').map(Number);
+    if (!userGroups.has(userId)) {
+      userGroups.set(userId, []);
+    }
+    userGroups.get(userId)!.push({ canvasId, count });
+  }
+  // userId별 배치 쿼리
+  for (const [userId, canvases] of userGroups.entries()) {
+    const queryRunner = AppDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const values = canvases
+        .map((c, i) => `($1, $${i * 2 + 2}, $${i * 2 + 3}, NOW())`)
+        .join(',');
+
+      const params = [
+        userId,
+        ...canvases.flatMap((c) => [c.canvasId, c.count]),
+      ];
+
+      await queryRunner.query(
+        `
+        INSERT INTO user_canvas (user_id, canvas_id, try_count, joined_at)
+        VALUES ${values}
+        ON CONFLICT (user_id, canvas_id)
+        DO UPDATE SET try_count = user_canvas.try_count + EXCLUDED.try_count
+      `,
+        params
+      );
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error(error);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+}
 
 // 개선된 flushPixelToDb 함수
 async function flushPixelToDb() {
@@ -150,8 +234,21 @@ async function flushPixelToDb() {
 
 // 주기적 flush 설정
 setInterval(() => {
-  if (pixelUpdateMap.size > 0) {
-    flushPixelToDb();
+  if (pixelUpdateMap.size > 0 && !isFlushingPixel) {
+    isFlushingPixel = true;
+    flushPixelToDb()
+      .catch((err) => console.error('[PixelUpdate] 주기적 처리 실패:', err))
+      .finally(() => {
+        isFlushingPixel = false;
+      });
+  }
+  if (countUpdateMap.size > 0 && !isFlushingCount) {
+    isFlushingCount = true;
+    flushCountToDb()
+      .catch((err) => console.error('[CountUpdate] 주기적 처리 실패:', err))
+      .finally(() => {
+        isFlushingCount = false;
+      });
   }
 }, BATCH_TIMEOUT_MS);
 
@@ -159,7 +256,7 @@ setInterval(() => {
 setInterval(() => {
   const memUsage = process.memoryUsage();
   console.log(
-    `[PixelUpdate] 메모리: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, 큐 크기: ${pixelUpdateMap.size}픽셀`
+    `[PixelUpdate] 메모리: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, pixel 큐 크기: ${pixelUpdateMap.size}픽셀, count 큐 크기: ${countUpdateMap.size}개`
   );
 }, 60000);
 
