@@ -360,7 +360,14 @@ export class CanvasService {
 
     try {
       // 실제 픽셀 저장
-      return await this.tryDrawPixel({ canvas_id, x, y, color, userId });
+      const result = await this.tryDrawPixel({
+        canvas_id,
+        x,
+        y,
+        color,
+        userId,
+      });
+      return result;
     } finally {
       // 락 해제
       await this.releaseRedisLock(lockKey, lockUser);
@@ -498,7 +505,7 @@ export class CanvasService {
 
     // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
-      await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+      // await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
     } catch (error) {
       console.error('사용자 캔버스 카운트 증가 실패:', error);
       // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행
@@ -542,7 +549,7 @@ export class CanvasService {
 
     // // draw-pixel 이벤트가 처리되었으므로 user_canvas의 count를 1 증가
     try {
-      await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
+      // await this.incrementUserCanvasCount(userId, parseInt(canvas_id));
     } catch (error) {
       console.error('사용자 캔버스 카운트 증가 실패:', error);
       // 카운트 증가 실패는 로그만 남기고 픽셀 그리기는 계속 진행

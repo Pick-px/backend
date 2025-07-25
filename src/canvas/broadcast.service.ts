@@ -13,7 +13,7 @@ interface PixelUpdate {
 export class BroadcastService implements OnModuleInit {
   private pixelBatchQueue = new Map<string, PixelUpdate[]>();
   private batchTimeout: NodeJS.Timeout | null = null;
-  private readonly BATCH_SIZE = 50;
+  private readonly BATCH_SIZE = 100;
   private readonly BATCH_TIMEOUT_MS = 16.67; // 60fps (1000ms / 60)
   private server: Server | null = null;
 
@@ -31,7 +31,7 @@ export class BroadcastService implements OnModuleInit {
   }
 
   // 즉시 브로드캐스트 옵션 추가
-  addPixelToBatch(pixel: PixelUpdate, immediate: boolean = false) {
+  addPixelToBatch(pixel: PixelUpdate) {
     if (!this.server) {
       console.error('[BroadcastService] Socket 서버 인스턴스가 없습니다');
       return;
@@ -40,12 +40,12 @@ export class BroadcastService implements OnModuleInit {
     const { canvas_id } = pixel;
 
     // 즉시 브로드캐스트 요청이면 바로 처리
-    if (immediate) {
-      this.server.to(`canvas_${canvas_id}`).emit('pixel_update', {
-        pixels: [pixel],
-      });
-      return;
-    }
+    // if (immediate) {
+    //   this.server.to(`canvas_${canvas_id}`).emit('pixel_update', {
+    //     pixels: [pixel],
+    //   });
+    //   return;
+    // }
 
     // 그 외는 기존 배치 처리 로직
     if (!this.pixelBatchQueue.has(canvas_id)) {
@@ -80,7 +80,7 @@ export class BroadcastService implements OnModuleInit {
     const pixels = this.pixelBatchQueue.get(canvas_id);
     if (!pixels || pixels.length === 0) return;
 
-    // 배치로 전송
+    // Redis adapter를 통한 멀티서버 브로드캐스트
     this.server
       .to(`canvas_${canvas_id}`)
       .emit('pixel_update', { pixels: pixels });

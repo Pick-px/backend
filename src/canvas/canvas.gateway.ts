@@ -143,15 +143,12 @@ export class CanvasGateway implements OnGatewayInit {
         return;
       }
 
-      // this.broadcastService.addPixelToBatch(
-      //   {
-      //     canvas_id: pixel.canvas_id,
-      //     x: pixel.x,
-      //     y: pixel.y,
-      //     color: pixel.color,
-      //   },
-      //   true
-      // );
+      this.broadcastService.addPixelToBatch({
+        canvas_id: pixel.canvas_id,
+        x: pixel.x,
+        y: pixel.y,
+        color: pixel.color,
+      });
 
       // // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
       // await this.redis.publish(
@@ -165,16 +162,16 @@ export class CanvasGateway implements OnGatewayInit {
       //   })
       // );
 
-      // 비동기 브로드캐스트 (응답 속도 향상)
-      this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
-        pixels: [
-          {
-            x: pixel.x,
-            y: pixel.y,
-            color: pixel.color,
-          },
-        ],
-      });
+      // Redis adapter를 통한 멀티서버 브로드캐스트 (자기 자신 포함 필수)
+      // this.server.to(`canvas_${pixel.canvas_id}`).emit('pixel_update', {
+      //   pixels: [
+      //     {
+      //       x: pixel.x,
+      //       y: pixel.y,
+      //       color: pixel.color,
+      //     },
+      //   ],
+      // });
     } catch (error) {
       console.error('[Gateway] 픽셀 그리기 에러:', error);
       client.emit('pixel_error', { message: '픽셀 그리기 실패' });
@@ -272,9 +269,7 @@ export class CanvasGateway implements OnGatewayInit {
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
-        },
-        false
-      );
+        }
 
       // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
       // await this.redis.publish(
