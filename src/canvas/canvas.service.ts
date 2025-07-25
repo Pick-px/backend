@@ -339,7 +339,7 @@ export class CanvasService {
     // 픽셀 단위 분산락 (동시성 제어)
     const lockKey = `lock:${canvas_id}:${x}:${y}`;
     const lockUser = userId.toString();
-    const ttl = 15; // 락 유지 시간(ms)
+    const ttl = 20; // 락 유지 시간(ms)
 
     // Redis NX 락 시도
     const is_locked = await this.redisClient.set(
