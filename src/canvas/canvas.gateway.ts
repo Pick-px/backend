@@ -269,7 +269,7 @@ export class CanvasGateway implements OnGatewayInit {
           x: pixel.x,
           y: pixel.y,
           color: pixel.color,
-        }
+        });
 
       // 워커로 픽셀 이벤트 발행 (DB 저장을 위해)
       // await this.redis.publish(

@@ -7,7 +7,7 @@ import {
   Post,
   Body,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+// import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { WaitingResponseDto, QuestionDto } from './dto/waitingResponse.dto';
 import { GameService } from './game.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
@@ -20,7 +20,7 @@ interface UploadRequet {
   questions: UploadQuestionDto[];
 }
 
-@ApiTags('canvas')
+// @ApiTags('canvas')
 @Controller('api/game')
 export class GameController {
   constructor(
@@ -30,7 +30,7 @@ export class GameController {
 
   @Get('waitingroom')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  // @ApiBearerAuth()
   async waitingGame(
     @Req() req: AuthRequest,
     @Query('canvasId') canvasId: string

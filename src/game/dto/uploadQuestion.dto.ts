@@ -1,16 +1,16 @@
-import { ApiProperty } from '@nestjs/swagger';
+// import { ApiProperty } from '@nestjs/swagger';
 import { IsNumber, IsString, IsArray } from 'class-validator';
 
 export class UploadQuestionDto {
-  @ApiProperty()
+  // @ApiProperty()
   @IsString()
   question: string;
 
-  @ApiProperty()
+  // @ApiProperty()
   @IsArray()
   options: string[];
 
-  @ApiProperty()
+  // @ApiProperty()
   @IsNumber()
   answer: number;
 }
